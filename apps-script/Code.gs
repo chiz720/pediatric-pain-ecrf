@@ -1,97 +1,28 @@
 /**
  * PPP eCRF endpoint.
  *
- * One Apps Script project, bound to the workbook, deployed as a web app
- * executing as the study account.
+ * Bound to the study workbook, deployed as a web app executing as the study
+ * account, access "Anyone with the link".
  *
- * FIRST-TIME SETUP — do this once, before deploying:
- *   1. Run the setup() function from the editor (Run > setup).
- *   2. Approve the permissions prompt.
- *   3. Open the new _devices tab in the workbook to read the device tokens.
- *   4. Deploy > New deployment > Web app
- *        Execute as:      Me
- *        Who has access:  Anyone with the link
- *   5. Copy the /exec URL into each tablet's Settings screen.
+ * SETUP — paste, save, deploy. There is nothing to configure and nothing to
+ * run first. Sheets create themselves on first write.
  *
- * Contract notes:
- *   - Always returns HTTP 200. Outcomes are per-submission, so one bad row
- *     never fails a batch.
- *   - A duplicate is a success. This is what makes a flaky network safe.
- *   - Never returns date_of_birth. The roster carries derived age only.
+ *   Deploy > New deployment > Web app
+ *     Execute as:      Me
+ *     Who has access:  Anyone with the link
+ *
+ * After ANY edit to this file: Deploy > Manage deployments > pencil >
+ * Version: New version > Deploy. The URL never changes.
+ *
+ * CAMP_KEY must match campKey in config.js. It is the only shared secret, it
+ * is visible to anyone who reads the app's source, and its job is narrow: stop
+ * the workbook accepting writes from anything that merely stumbles on this
+ * URL. To lock everyone out — a lost phone, a leaked link — change it in both
+ * files and redeploy.
  */
 
+var CAMP_KEY = 'CAMP-2026-KN';
 var SCHEMA_VERSION = '1.0.0';
-
-/**
- * One token per data collector, not per device. Collectors open a shared link
- * on their own phone or laptop, so the device is unknown in advance — the
- * person is the thing you can actually issue a credential to and revoke.
- * Add or remove ids here and re-run setup().
- */
-var RATER_IDS = [
-  'RN-01', 'RN-02', 'RN-03', 'RN-04', 'RN-05', 'RN-06',
-  'MO-01', 'MO-02', 'RA-01', 'RA-02', 'COORD-01',
-];
-
-/**
- * Run once from the editor. Issues one token per collector, stores them, and
- * writes them to a _raters tab so the coordinator can hand them out without
- * ever opening the script again.
- *
- * Safe to re-run: it keeps existing tokens and only fills in missing ones, so
- * adding a collector mid-camp does not disturb anyone already working.
- */
-function setup() {
-  var props = PropertiesService.getScriptProperties();
-  var tokens = JSON.parse(props.getProperty('TOKENS') || '{}');
-
-  RATER_IDS.forEach(function (id) {
-    if (!tokens[id]) tokens[id] = newToken();
-  });
-
-  props.setProperty('TOKENS', JSON.stringify(tokens));
-  props.setProperty('SCHEMA_VER', SCHEMA_VERSION);
-
-  writeRaterSheet(tokens);
-  Logger.log('Setup complete. ' + Object.keys(tokens).length + ' collector tokens are in the _raters tab.');
-}
-
-/**
- * Issue a fresh token for one collector, invalidating the old one at once.
- * Use this when someone leaves the camp or loses their phone.
- */
-function rotateToken(raterId) {
-  var props = PropertiesService.getScriptProperties();
-  var tokens = JSON.parse(props.getProperty('TOKENS') || '{}');
-  tokens[raterId] = newToken();
-  props.setProperty('TOKENS', JSON.stringify(tokens));
-  writeRaterSheet(tokens);
-  Logger.log('New token for ' + raterId + ': ' + tokens[raterId]);
-}
-
-function newToken() {
-  var chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 — these get typed by hand
-  var out = '';
-  for (var i = 0; i < 20; i++) {
-    out += chars.charAt(Math.floor(Math.random() * chars.length));
-    if (i % 5 === 4 && i < 19) out += '-';
-  }
-  return out;
-}
-
-function writeRaterSheet(tokens) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var sheet = ss.getSheetByName('_raters');
-  if (!sheet) sheet = ss.insertSheet('_raters');
-  sheet.clear();
-  sheet.appendRow(['rater_id', 'token', 'name', 'role', 'calibrated']);
-  Object.keys(tokens).sort().forEach(function (id) {
-    sheet.appendRow([id, tokens[id], '', '', '']);
-  });
-  sheet.setFrozenRows(1);
-  sheet.getRange(1, 1, 1, 5).setFontWeight('bold');
-  sheet.autoResizeColumns(1, 5);
-}
 
 var PROVENANCE = [
   'submission_uuid', 'supersedes_uuid', 'study_number', 'rater_id', 'device_id',
@@ -129,7 +60,7 @@ function doPost(e) {
           rejected.push({ uuid: sub.uuid || null, reason: 'malformed' });
           return;
         }
-        if (body.schemaVersion !== props('SCHEMA_VER')) {
+        if (body.schemaVersion !== SCHEMA_VERSION) {
           rejected.push({ uuid: sub.uuid, reason: 'schema_version_unsupported' });
           return;
         }
@@ -156,7 +87,7 @@ function doPost(e) {
       accepted: accepted,
       duplicates: duplicates,
       rejected: rejected,
-      schemaVersion: props('SCHEMA_VER'),
+      schemaVersion: SCHEMA_VERSION,
     });
   } catch (err) {
     return json({ ok: false, error: 'server_error', detail: String(err).slice(0, 200) });
@@ -171,7 +102,7 @@ function doGet(e) {
     return json({
       ok: true,
       serverTs: new Date().toISOString(),
-      schemaVersion: props('SCHEMA_VER'),
+      schemaVersion: SCHEMA_VERSION,
     });
   }
   if (mode === 'roster') {
@@ -187,26 +118,12 @@ function doGet(e) {
 /* ------------------------------------------------------------------ */
 
 function authorise(body) {
-  if (!body || !body.token) return { ok: false, error: 'unauthorised' };
-  if (!tokenValid(body.token, body.raterId)) return { ok: false, error: 'unauthorised' };
+  if (!body || body.token !== CAMP_KEY) return { ok: false, error: 'unauthorised' };
   return { ok: true };
 }
 
-/**
- * A token belongs to a collector. When a raterId is supplied the pair must
- * match, so one person's token cannot be used under another person's name and
- * quietly corrupt the inter-rater analysis.
- */
-function tokenValid(token, raterId) {
-  if (!token) return false;
-  var tokens = JSON.parse(props('TOKENS') || '{}');
-  if (raterId) return tokens[raterId] === token;
-  for (var k in tokens) if (tokens[k] === token) return true;
-  return false;
-}
-
-function props(key) {
-  return PropertiesService.getScriptProperties().getProperty(key);
+function tokenValid(token) {
+  return token === CAMP_KEY;
 }
 
 /**

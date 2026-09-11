@@ -114,9 +114,13 @@ No dependencies and no install step. Node 20+.
   unscheduled rows. Do not read `onTime` without checking `applicable`.
 - Age boundaries in tests are deliberately one day either side of a birthday.
   If you change `routing` params, those tests should fail — that is the point.
-- Tokens belong to **collectors**, not devices (`RATER_IDS` in `Code.gs`).
-  Collectors open a shared link on their own phones; the device id is minted
-  per browser in `app.js` and never typed.
+- **`config.js` is the only file that changes between camps** — endpoint URL,
+  camp key, site, and the list of collector names. Nothing is typed on a phone:
+  a collector taps their name once and never sees a setting. `campKey` in
+  `config.js` must match `CAMP_KEY` in `Code.gs`.
+- The camp key is visible in page source by design. It stops drive-by writes to
+  a workbook holding dates of birth; it is not authentication. Rater identity
+  is attribution, not a login.
 - `tests/appsScript.test.js` runs `Code.gs` in a VM sandbox with fake Google
   services. Editing the endpoint without running it there means shipping
   untested code to a place you cannot debug.

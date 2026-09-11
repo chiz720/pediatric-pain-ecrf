@@ -58,12 +58,9 @@ class FakeSpreadsheet {
   insertSheet(n) { const s = new FakeSheet(n); this.sheets.set(n, s); return s; }
 }
 
-function loadEndpoint({ tokens = { 'RN-014': 'TOK-1' }, schemaVer = '1.0.0' } = {}) {
+function loadEndpoint({ campKey = 'CAMP-2026-KN', schemaVer = '1.0.0' } = {}) {
   const ss = new FakeSpreadsheet();
-  const scriptProps = new Map([
-    ['TOKENS', JSON.stringify(tokens)],
-    ['SCHEMA_VER', schemaVer],
-  ]);
+  const scriptProps = new Map();
   const cache = new Map();
 
   const sandbox = {
@@ -90,6 +87,8 @@ function loadEndpoint({ tokens = { 'RN-014': 'TOK-1' }, schemaVer = '1.0.0' } = 
   };
   createContext(sandbox);
   runInContext(readFileSync(join(root, 'apps-script/Code.gs'), 'utf8'), sandbox);
+  sandbox.CAMP_KEY = campKey;
+  sandbox.SCHEMA_VERSION = schemaVer;
   return { sandbox, ss, scriptProps, cache };
 }
 
@@ -98,7 +97,7 @@ const post = (sandbox, body) =>
 const get = (sandbox, parameter) => JSON.parse(sandbox.doGet({ parameter }).text);
 
 const envelope = (submissions, over = {}) => ({
-  token: 'TOK-1', deviceId: 'dev-9f2c41', raterId: 'RN-014',
+  token: 'CAMP-2026-KN', deviceId: 'dev-9f2c41', raterId: 'Nurse — ward 1',
   schemaVersion: '1.0.0', appVersion: '2026.09.11', paramsVersion: '1.0.0',
   submissions, ...over,
 });
@@ -118,11 +117,25 @@ test('a request without a valid token is refused', () => {
   assert.equal(res.error, 'unauthorised');
 });
 
-test("one collector's token cannot be used under another collector's name", () => {
-  // Otherwise a shared token would silently pollute the inter-rater analysis.
-  const { sandbox } = loadEndpoint({ tokens: { 'RN-014': 'TOK-1', 'RN-015': 'TOK-2' } });
-  assert.equal(post(sandbox, envelope([obs('a')], { raterId: 'RN-015' })).ok, false);
-  assert.equal(post(sandbox, envelope([obs('a')], { raterId: 'RN-014' })).ok, true);
+test('the camp key is the only credential, and it is checked', () => {
+  const { sandbox } = loadEndpoint();
+  assert.equal(post(sandbox, envelope([obs('a')])).ok, true);
+  assert.equal(post(sandbox, envelope([obs('b')], { token: 'CAMP-2025-OLD' })).ok, false);
+});
+
+test('changing the camp key locks out anyone still holding the old one', () => {
+  // This is how a leaked link or a lost phone is dealt with: one line in
+  // Code.gs and config.js, redeploy, and the old key stops working.
+  const { sandbox } = loadEndpoint({ campKey: 'CAMP-2026-ROTATED' });
+  assert.equal(post(sandbox, envelope([obs('a')])).ok, false);
+  assert.equal(post(sandbox, envelope([obs('a')], { token: 'CAMP-2026-ROTATED' })).ok, true);
+});
+
+test('the collector name is recorded as given — it is attribution, not authentication', () => {
+  const { sandbox, ss } = loadEndpoint();
+  post(sandbox, envelope([obs('a')], { raterId: 'Dr Susan' }));
+  const sheet = ss.getSheetByName('05_pain_obs');
+  assert.equal(sheet.rows[1][sheet.rows[0].indexOf('rater_id')], 'Dr Susan');
 });
 
 /* ---------------- writing ---------------- */
@@ -139,7 +152,7 @@ test('a submission becomes a row with full provenance', () => {
 
   assert.equal(cell('submission_uuid'), 'uuid-1');
   assert.equal(cell('study_number'), 'PPP-KN-0147-0');
-  assert.equal(cell('rater_id'), 'RN-014');
+  assert.equal(cell('rater_id'), 'Nurse — ward 1');
   assert.equal(cell('device_id'), 'dev-9f2c41');
   assert.equal(cell('timepoint'), 'T4');
   assert.equal(cell('client_ts'), '2026-09-11T10:00:00Z');
@@ -250,7 +263,7 @@ test('the roster never returns a date of birth', () => {
     data: { study_number: 'PPP-KN-0147-0', date_of_birth: '2022-07-11', age_days: 1523, age_months: 50 },
   }]));
 
-  const res = get(sandbox, { mode: 'roster', token: 'TOK-1' });
+  const res = get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN' });
   assert.equal(res.ok, true);
   assert.equal(res.roster.length, 1);
 
@@ -279,7 +292,7 @@ test('the roster gathers the anchors the due-list needs', () => {
       data: { study_number: 'PPP-KN-0147-0', anaesthesia_end: '2026-09-11T10:55:00Z', block_at: '2026-09-11T10:05:00Z' } },
   ]));
 
-  const child = get(sandbox, { mode: 'roster', token: 'TOK-1' }).roster[0];
+  const child = get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN' }).roster[0];
   assert.equal(child.anaesthesia_end, '2026-09-11T10:55:00Z');
   assert.equal(child.block_at, '2026-09-11T10:05:00Z');
   assert.equal(child.weight_kg, 16);
@@ -294,42 +307,16 @@ test('health reports the schema version a tablet must match', () => {
   assert.ok(res.serverTs);
 });
 
-/* ---------------- setup ---------------- */
+/* ---------------- no setup step ---------------- */
 
-test('setup issues one token per collector and publishes them to _raters', () => {
-  const { sandbox, ss, scriptProps } = loadEndpoint({ tokens: {} });
-  sandbox.setup();
+test('the endpoint needs no configuration run before it works', () => {
+  // No Script Properties, no setup(), no token sheet. Paste, deploy, done —
+  // a step nobody can forget is a step nobody can get wrong.
+  const { sandbox, ss } = loadEndpoint();
+  assert.equal(typeof sandbox.setup, 'undefined');
+  assert.equal(typeof sandbox.rotateToken, 'undefined');
 
-  const tokens = JSON.parse(scriptProps.get('TOKENS'));
-  const n = sandbox.RATER_IDS.length;
-  assert.equal(Object.keys(tokens).length, n);
-  assert.equal(new Set(Object.values(tokens)).size, n, 'tokens must be distinct');
-
-  const raters = ss.getSheetByName('_raters');
-  assert.equal(raters.rows[0][0], 'rater_id');
-  assert.equal(raters.rows.length, n + 1);
-});
-
-test('adding a collector mid-camp does not disturb anyone already working', () => {
-  const { sandbox, scriptProps } = loadEndpoint({ tokens: { 'RN-01': 'KEEP-ME' } });
-  sandbox.setup();
-  const tokens = JSON.parse(scriptProps.get('TOKENS'));
-  assert.equal(tokens['RN-01'], 'KEEP-ME');
-  assert.equal(Object.keys(tokens).length, sandbox.RATER_IDS.length);
-});
-
-test('rotating a token revokes the old one immediately', () => {
-  const { sandbox, scriptProps } = loadEndpoint({ tokens: { 'RN-014': 'OLD' } });
-  sandbox.rotateToken('RN-014');
-  const tokens = JSON.parse(scriptProps.get('TOKENS'));
-  assert.notEqual(tokens['RN-014'], 'OLD');
-  assert.equal(post(sandbox, envelope([obs('a')], { token: 'OLD' })).ok, false);
-});
-
-test('generated tokens omit characters that are misread when typed by hand', () => {
-  const { sandbox, scriptProps } = loadEndpoint({ tokens: {} });
-  sandbox.setup();
-  for (const token of Object.values(JSON.parse(scriptProps.get('TOKENS')))) {
-    assert.ok(!/[IO01]/.test(token), `${token} contains an ambiguous character`);
-  }
+  const res = post(sandbox, envelope([obs('first-ever')]));
+  assert.deepEqual(res.accepted, ['first-ever']);
+  assert.ok(ss.getSheetByName('05_pain_obs'), 'the sheet created itself on first write');
 });

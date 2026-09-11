@@ -11,74 +11,66 @@ and there is no reason to publish the address of an identifiable dataset.
 
 ---
 
-## 1. The endpoint
+## 1. The endpoint — once, about three minutes
 
 1. Open the workbook. **Extensions → Apps Script.**
 2. Delete the placeholder `function myFunction() {}`.
-3. Paste the entire contents of `apps-script/Code.gs` from this repo.
-4. Save (the disk icon). Name the project `PPP eCRF endpoint`.
-5. In the function dropdown at the top, choose **`setup`**, then press **Run**.
-   - Google will ask for permission the first time. Choose your account,
-     then **Advanced → Go to PPP eCRF endpoint (unsafe)** → **Allow**.
-     This warning appears for every unverified personal script; it is asking
-     whether you trust your own code.
-6. Go back to the workbook. There is now a **`_raters`** tab holding one token
-   per data collector. That is where tokens live from now on — you never need
-   to open the script again to read them. Fill in the `name` and `role`
-   columns so you know whose token is whose.
-7. Back in the Apps Script editor: **Deploy → New deployment**.
-   - Click the gear next to "Select type", choose **Web app**.
-   - Description: `v1`
+3. Paste the whole of `apps-script/Code.gs`. Save.
+4. **Deploy → New deployment**, gear icon → **Web app**.
    - **Execute as: Me**
    - **Who has access: Anyone with the link**
-   - **Deploy**, approve again if asked.
-8. Copy the **Web app URL**. It ends in `/exec`. That is the endpoint.
+   - **Deploy**, then approve the permission prompt. Google will warn that the
+     app is unverified — it is asking whether you trust your own script.
+     **Advanced → Go to … (unsafe) → Allow.**
+5. Copy the **Web app URL** (it ends in `/exec`).
+6. Put that URL into `config.js` in the repo, as `endpointUrl`. Push.
 
-> **Re-deploying after a code change:** Deploy → Manage deployments → pencil
-> icon → Version: New version → Deploy. Editing the code alone changes nothing
-> that phones can see until you do this. The URL stays the same.
+There is nothing to run first and no settings to fill in. Sheets create
+themselves on the first write.
 
-> **Apps Script is slow, and that is normal.** A write takes a few seconds; the
-> first roster read of each minute can take considerably longer on a busy camp.
-> None of it blocks anyone — records save to the phone instantly and travel in
-> the background. Do not let anyone sit watching the pending counter.
+> **After any change to `Code.gs`:** Deploy → Manage deployments → pencil →
+> Version: **New version** → Deploy. Editing alone changes nothing that phones
+> can see. The URL stays the same.
 
-## 2. Each data collector
+> **Apps Script is slow, and that is normal.** A write takes a few seconds.
+> Nothing blocks anyone — records save to the phone instantly and travel in the
+> background. Do not let anyone sit watching the pending counter.
+
+## 2. Each data collector — one tap
 
 The app lives at **https://chiz720.github.io/pediatric-pain-ecrf/**
 
-Send them two things: **that link** and **their own token** from the
-`_raters` tab. Send the token separately from the link — a message containing
-both is a credential someone can forward.
+Send them the link. That is all. On first open they tap their name from a list
+and never see a setting again.
 
-They then, once:
+1. Open the link.
+2. Tap your name.
+3. **Add to Home Screen** (iPhone: Share → Add to Home Screen; Android: menu →
+   Add to Home screen), then open it once from there.
 
-1. Open the link. Tap **Settings**.
-2. Fill in:
-   - **Your rater ID** — e.g. `RN-03`, exactly as written in `_raters`
-   - **Your token** — their own row from `_raters`
-   - **Endpoint URL** — the `/exec` URL from step 8 (same for everyone)
-   - **Site code** — two capital letters, e.g. `KN`
-   - **Rater has passed calibration** — `No` until they have. While this is No,
-     everything they send is tagged `training=1` and excluded from analysis.
-3. **Save settings**, then **Check clock**. If it reports a skew over two
-   minutes, fix the phone's clock before collecting anything — every derived
-   interval in the study depends on these timestamps.
-4. **Add to Home Screen** (iPhone: Share → Add to Home Screen; Android: menu →
-   Add to Home screen), then open it once from there. This is what makes it
-   keep working when the signal drops.
+Do this **on wifi before the camp starts.** The first open is the only one that
+genuinely needs a connection.
 
-Do all four steps **on wifi, before the camp starts.** The first open is the
-only one that genuinely needs a connection.
+Their name is what the study records as the rater, so it matters that people
+pick their own — inter-rater agreement is one of the study's measures. It is
+attribution, not a login: the app trusts what is tapped.
 
-Tokens belong to people, not handsets. Nobody should use someone else's: the
-endpoint rejects a mismatched pair, and rows are attributed to whoever the
-token belongs to, which is what the inter-rater analysis depends on. Each
-browser mints its own device id automatically — nothing to type.
+### Changing the list of collectors
 
-**If someone loses their phone or leaves the camp**, open the Apps Script
-editor, run `rotateToken` with their rater id, and their old token stops
-working immediately. Nobody else is disturbed.
+Edit `collectors` in `config.js` and push. It appears on every phone at the
+next load.
+
+### The camp key
+
+`config.js` and `Code.gs` share one line: `campKey` / `CAMP_KEY`. Nobody types
+it and nobody sees it. It exists so the workbook will not accept writes from
+anything that merely stumbles on the endpoint URL, which matters because the
+workbook holds children's dates of birth.
+
+It is not a password — anyone who reads the app's source can find it. If the
+link escapes the team, or a phone is lost and you want certainty, change that
+one line in **both** files, push, and redeploy the script. Everyone else
+carries on without noticing.
 
 ### Is this an online app or an offline one?
 
@@ -182,8 +174,7 @@ The workbook holds dates of birth, so it is an identifiable dataset.
 
 ## Checking it works
 
-In the Apps Script editor, run `setup` again — it is safe to re-run and will
-not change tokens already handed out. Then, from any browser:
+From any browser:
 
 ```
 <your /exec URL>?mode=health
@@ -198,9 +189,10 @@ should return something like:
 If you get an HTML login page instead, the deployment's access is not set to
 "Anyone with the link".
 
-Then do one real end-to-end check before the camp: enrol a fake child with a
-study number you will recognise (`PPP-ZZ-9999-…`), record one assessment, wait
-for the pending count to reach zero, and confirm the rows appear in
-`01_enrolment` and `05_pain_obs`. Delete nothing afterwards — mark the test
-rows by putting `TEST` in the `_audit` note, or simply exclude that study
-number in the analysis. Raw rows are append-only by design.
+Then do one real end-to-end check before the camp: open the app, enrol a fake
+child with a study number you will recognise (`PPP-ZZ-9999-4`), record one
+assessment, wait for the pending count to reach zero, and confirm the rows
+appear in `01_enrolment` and `05_pain_obs`.
+
+Do not delete the test rows afterwards. Raw rows are append-only by design —
+exclude that study number in the analysis instead.

@@ -5,6 +5,7 @@
  * wait for a network that a surgical camp does not have.
  */
 
+import { CONFIG } from './config.js';
 import { loadParams, params } from './lib/params.js';
 import { renderForm, el } from './lib/render.js';
 import { buildDueList, dueListSummary, childSchedule, STATUS } from './lib/dueList.js';
@@ -13,7 +14,7 @@ import * as sync from './lib/sync.js';
 import { validateStudyNumberField, validateDateOfBirth, warnEntryLag, summarise } from './lib/validate.js';
 import { ageLabel } from './lib/age.js';
 
-const APP_VERSION = '2026.09.11-p2';
+const APP_VERSION = '2026.09.11-p3';
 const SETTINGS_KEY = 'ppp.device';
 
 let CRF = null;
@@ -36,20 +37,21 @@ async function boot() {
 
   settings = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null') || {};
 
-  // Collectors open a shared link on their own phone or laptop, so the device
-  // is unknown in advance. Mint an id per browser install and keep it: it is
-  // what makes "which handset produced this row" answerable during QC without
-  // asking anyone to name their phone.
+  // Each browser gets its own id so a record can be traced back to a handset
+  // during QC. Nobody types it and nobody sees it.
   if (!settings.deviceId) {
     settings.deviceId = 'dev-' + Math.random().toString(36).slice(2, 8);
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    saveSettings();
   }
+
+  // Everything else comes from config.js. The only thing a collector is ever
+  // asked is who they are, and only once.
   sync.configure({
-    endpointUrl: settings.endpointUrl,
-    token: settings.token,
+    endpointUrl: CONFIG.endpointUrl,
+    token: CONFIG.campKey,
     deviceId: settings.deviceId,
-    raterId: settings.raterId,
-    training: settings.calibrated !== true,
+    raterId: settings.collector || 'unassigned',
+    training: false,
     schemaVersion: CRF.schemaVersion,
     paramsVersion: paramsJson.paramsVersion,
     appVersion: APP_VERSION,
@@ -73,6 +75,7 @@ async function boot() {
   });
 
   route();
+  checkClockQuietly();
 }
 
 /* ---------------- routing ---------------- */
@@ -81,12 +84,18 @@ const ROUTES = [
   [/^#\/due$/, screenDue],
   [/^#\/enrol$/, screenEnrol],
   [/^#\/children$/, screenChildren],
-  [/^#\/settings$/, screenSettings],
+  [/^#\/me$/, screenWhoAmI],
   [/^#\/child\/([^/]+)$/, screenChild],
   [/^#\/assess\/([^/]+)\/([^/]+)$/, screenAssess],
 ];
 
 function route() {
+  // Nobody gets a form until we know who is filling it in — rater identity is
+  // a study variable, not a preference.
+  if (!settings.collector && (location.hash || '#/due') !== '#/me') {
+    location.hash = '#/me';
+    return;
+  }
   const hash = location.hash || '#/due';
   view.style.paddingBottom = '110px';
   for (const [pattern, handler] of ROUTES) {
@@ -428,85 +437,64 @@ async function captureRosterFacts(studyNumber, formId, data) {
 
 /* ---------------- settings ---------------- */
 
-function screenSettings() {
-  setTitle('Settings', `v${APP_VERSION}`);
+/**
+ * The entire setup, such as it is: tap your name. Endpoint, key, site and camp
+ * all come from config.js, so there is nothing else to get wrong at 3 a.m.
+ */
+function screenWhoAmI() {
+  const chosen = settings.collector;
+  setTitle(chosen ? 'You' : 'Who is collecting?', chosen ? '' : 'Tap your name. Asked once.');
   view.replaceChildren();
 
-  const fields = [
-    ['raterId', 'Your rater ID'],
-    ['token', 'Your token'],
-    ['endpointUrl', 'Endpoint URL'],
-    ['siteCode', 'Site code'],
-  ];
-
-  const form = el('div', { class: 'form-body' },
-    ...fields.map(([key, label]) =>
-      el('div', { class: 'field' },
-        el('label', { class: 'field-label', text: label }),
-        el('input', {
-          class: 'control', type: key === 'token' ? 'password' : 'text',
-          value: settings[key] ?? '',
-          oninput: (e) => { settings[key] = e.target.value; },
-        }),
-      )),
-    el('div', { class: 'field' },
-      el('label', { class: 'field-label', text: 'This device' }),
-      el('output', { class: 'computed', text: settings.deviceId }),
-      el('p', { class: 'help', text: 'Generated automatically. Quote it if a record needs tracing.' }),
-    ),
-    el('div', { class: 'field' },
-      el('label', { class: 'field-label', text: 'Rater has passed calibration' }),
-      el('div', { class: 'segmented' },
-        ...[['Yes', true], ['No', false]].map(([label, v]) =>
-          el('button', {
-            type: 'button', class: `seg ${settings.calibrated === v ? 'on' : ''}`, text: label,
-            onclick: (e) => {
-              settings.calibrated = v;
-              e.target.parentElement.querySelectorAll('.seg').forEach((b) => b.classList.remove('on'));
-              e.target.classList.add('on');
-            },
-          })),
-      ),
-      el('p', { class: 'help', text: 'Until this is yes, submissions are tagged training=1.' }),
-    ),
-  );
-
-  const actions = el('div', { class: 'form-footer' },
-    el('button', {
-      class: 'primary', text: 'Save settings',
+  view.append(el('div', { class: 'stack' },
+    ...CONFIG.collectors.map((name) => el('button', {
+      class: `row-opt ${chosen === name ? 'on' : ''}`,
       onclick: () => {
-        localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+        settings.collector = name;
+        saveSettings();
         sync.configure({
-          endpointUrl: settings.endpointUrl, token: settings.token,
-          deviceId: settings.deviceId, raterId: settings.raterId,
-          training: settings.calibrated !== true,
+          endpointUrl: CONFIG.endpointUrl, token: CONFIG.campKey,
+          deviceId: settings.deviceId, raterId: name, training: false,
           schemaVersion: CRF.schemaVersion, paramsVersion: params().paramsVersion,
           appVersion: APP_VERSION,
         });
-        toast('Saved');
+        toast(`Hello, ${name}`);
+        location.hash = '#/due';
       },
-    }),
-    el('button', {
-      class: 'secondary', text: 'Check clock',
-      onclick: async () => {
-        try {
-          const r = await sync.checkClock();
-          toast(r.ok ? `Clock within ${Math.abs(r.skewSeconds)}s` : `Clock off by ${r.skewSeconds}s — fix before collecting`);
-        } catch { toast('No connection'); }
-      },
-    }),
-    el('button', {
-      class: 'secondary', text: 'Export device data',
-      onclick: async () => {
-        const dump = await exportAll();
-        const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
-        const a = el('a', { href: URL.createObjectURL(blob), download: `ppp-${settings.deviceId || 'device'}-${Date.now()}.json` });
-        document.body.append(a); a.click(); a.remove();
-      },
-    }),
-  );
+    }, el('span', { text: name }))),
+  ));
 
-  view.append(form, actions);
+  if (chosen) {
+    view.append(el('div', { class: 'me-foot' },
+      el('p', { class: 'help', text: `Camp ${CONFIG.campId} · site ${CONFIG.siteCode} · app ${APP_VERSION}` }),
+      el('button', {
+        class: 'secondary', text: 'Save a copy of this phone\u2019s records',
+        onclick: async () => {
+          const dump = await exportAll();
+          const blob = new Blob([JSON.stringify(dump, null, 2)], { type: 'application/json' });
+          const a = el('a', { href: URL.createObjectURL(blob), download: `ppp-${settings.deviceId}-${Date.now()}.json` });
+          document.body.append(a); a.click(); a.remove();
+        },
+      }),
+    ));
+  }
+}
+
+function saveSettings() {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+}
+
+/**
+ * Clocks matter — every derived interval is measured from timestamps this
+ * phone writes. Check quietly and only speak up when something is wrong.
+ */
+async function checkClockQuietly() {
+  try {
+    const r = await sync.checkClock();
+    if (!r.ok) toast(`This phone\u2019s clock is ${Math.abs(r.skewSeconds)}s out. Fix it before collecting.`);
+  } catch {
+    // Offline. Nothing to compare against, and nothing worth interrupting for.
+  }
 }
 
 /* ---------------- chrome ---------------- */
