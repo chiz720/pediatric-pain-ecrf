@@ -126,6 +126,12 @@ No dependencies and no install step. Node 20+.
 - `tests/appsScript.test.js` runs `Code.gs` in a VM sandbox with fake Google
   services. Editing the endpoint without running it there means shipping
   untested code to a place you cannot debug.
+- **Apps Script sometimes answers a POST with a redirect Chrome follows as a
+  GET**, so the reply arrives from `doGet` as `{"error":"unknown_mode"}`.
+  Measured live: the write has already succeeded — only the acknowledgement is
+  lost. `post()` therefore retries, and the submission uuid makes the retry a
+  duplicate rather than a second row. This is the reason uuids exist; do not
+  remove them and do not treat `unknown_mode` as a delivery failure.
 - **Changing `Code.gs` needs TWO manual steps by the owner: paste the file into
   the Apps Script editor, *then* deploy a new version.** Saying "redeploy"
   alone is not enough and has already cost one debugging round — redeploy
