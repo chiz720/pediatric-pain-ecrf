@@ -36,7 +36,12 @@ and there is no reason to publish the address of an identifiable dataset.
 
 > **Re-deploying after a code change:** Deploy → Manage deployments → pencil
 > icon → Version: New version → Deploy. Editing the code alone changes nothing
-> that tablets can see until you do this. The URL stays the same.
+> that phones can see until you do this. The URL stays the same.
+
+> **Apps Script is slow, and that is normal.** A write takes a few seconds; the
+> first roster read of each minute can take considerably longer on a busy camp.
+> None of it blocks anyone — records save to the phone instantly and travel in
+> the background. Do not let anyone sit watching the pending counter.
 
 ## 2. Each data collector
 

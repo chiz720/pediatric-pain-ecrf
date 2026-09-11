@@ -147,6 +147,7 @@ function doPost(e) {
       }
     });
 
+    if (accepted.length) invalidateRoster();
     audit(ss, body, serverTs, accepted.length, duplicates.length, rejected.length, '');
 
     return json({
@@ -175,7 +176,7 @@ function doGet(e) {
   }
   if (mode === 'roster') {
     if (!tokenValid(e.parameter.token)) return json({ ok: false, error: 'unauthorised' });
-    return json({ ok: true, serverTs: new Date().toISOString(), roster: roster() });
+    return json({ ok: true, serverTs: new Date().toISOString(), roster: cachedRoster() });
   }
   // A POST diverted here by a cached redirect lands with no mode. Say so
   // explicitly rather than returning something a client could mistake for an
@@ -313,6 +314,33 @@ function isDuplicate(ss, form, uuid, idx) {
 }
 
 /* ---------------- roster ---------------- */
+
+/**
+ * Building the roster reads several whole sheets, which is slow and gets
+ * slower as the camp fills up. Every collector's phone asks for it on a timer,
+ * so without a cache one camp of ten people would re-scan the workbook ten
+ * times a minute. Sixty seconds of staleness is invisible against a schedule
+ * whose tightest window is fifteen minutes.
+ */
+function cachedRoster() {
+  var cache = CacheService.getScriptCache();
+  var hit = cache.get('roster');
+  if (hit) {
+    try { return JSON.parse(hit); } catch (ignored) {}
+  }
+  var fresh = roster();
+  try {
+    cache.put('roster', JSON.stringify(fresh), 60);
+  } catch (ignored) {
+    // Over the 100KB cache entry limit — a very large camp. Serve it uncached.
+  }
+  return fresh;
+}
+
+/** Called after a write, so a newly enrolled child is not hidden for a minute. */
+function invalidateRoster() {
+  try { CacheService.getScriptCache().remove('roster'); } catch (ignored) {}
+}
 
 function roster() {
   var ss = SpreadsheetApp.getActiveSpreadsheet();
