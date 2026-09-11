@@ -1,0 +1,523 @@
+{
+  "schemaVersion": "1.0.0",
+  "title": "Prospective Perioperative Pediatric Pain Assessment — eCRF",
+  "generated": "2026-09-11",
+  "paramsVersion": "1.0.0",
+  "provenanceColumns": [
+    "submission_uuid", "supersedes_uuid", "study_number", "rater_id", "device_id",
+    "client_ts", "server_ts", "schema_version", "app_version", "params_version", "training"
+  ],
+
+  "instruments": {
+    "flacc": {
+      "label": "FLACC",
+      "range": [0, 10],
+      "source": "Merkel et al., Pediatr Nurs 1997",
+      "domains": [
+        { "id": "face",         "label": "Face",          "options": ["No particular expression or smile", "Occasional grimace or frown, withdrawn, uninterested", "Frequent to constant frown, quivering chin, clenched jaw"] },
+        { "id": "legs",         "label": "Legs",          "options": ["Normal position or relaxed", "Uneasy, restless, tense", "Kicking, or legs drawn up"] },
+        { "id": "activity",     "label": "Activity",      "options": ["Lying quietly, normal position, moves easily", "Squirming, shifting back and forth, tense", "Arched, rigid, or jerking"] },
+        { "id": "cry",          "label": "Cry",           "options": ["No cry (awake or asleep)", "Moans or whimpers, occasional complaint", "Crying steadily, screams or sobs, frequent complaints"] },
+        { "id": "consolability","label": "Consolability", "options": ["Content, relaxed", "Reassured by occasional touching, hugging or talking; distractible", "Difficult to console or comfort"] }
+      ]
+    },
+    "r_flacc": {
+      "label": "revised FLACC",
+      "range": [0, 10],
+      "source": "Malviya et al., Paediatr Anaesth 2006",
+      "note": "Same five domains with caregiver-supplied individualised behaviour descriptors, captured at enrolment.",
+      "inherits": "flacc"
+    },
+    "fps_r": {
+      "label": "Faces Pain Scale — Revised",
+      "range": [0, 10],
+      "source": "Hicks et al., Pain 2001",
+      "faces": 6,
+      "values": [0, 2, 4, 6, 8, 10],
+      "anchors": { "low": "no pain", "high": "very much pain" },
+      "note": "Sex- and ethnicity-neutral line drawings. No smile at the low anchor, no tears at the high anchor. Record the 0-10 metric value, not the ordinal face position."
+    },
+    "nrs": {
+      "label": "Numerical Rating Scale (11-point)",
+      "range": [0, 10],
+      "source": "von Baeyer et al., Pain 2009",
+      "anchors": { "low": "no pain", "high": "worst pain imaginable" }
+    },
+    "paed": {
+      "label": "Pediatric Anesthesia Emergence Delirium scale",
+      "range": [0, 20],
+      "source": "Sikich & Lerman, Anesthesiology 2004",
+      "responseScale": ["Not at all", "Just a little", "Quite a bit", "Very much", "Extremely"],
+      "note": "All five items are recorded on the same not-at-all to extremely response scale (0-4). Items 1-3 are reverse-scored by the app, never by the rater.",
+      "items": [
+        { "id": "eye_contact", "label": "The child makes eye contact with the caregiver", "reverse": true },
+        { "id": "purposeful",  "label": "The child's actions are purposeful",              "reverse": true },
+        { "id": "aware",       "label": "The child is aware of their surroundings",        "reverse": true },
+        { "id": "restless",    "label": "The child is restless",                           "reverse": false },
+        { "id": "inconsolable","label": "The child is inconsolable",                       "reverse": false }
+      ]
+    },
+    "mypas_sf": {
+      "label": "modified Yale Preoperative Anxiety Scale — Short Form",
+      "range": [22.92, 100],
+      "source": "Kain et al. 1997; Jenkins et al., Anesth Analg 2014",
+      "note": "Four domains. The Use of Parents domain is omitted in the short form. Score = mean of (item / item maximum) across domains, x100.",
+      "domains": [
+        { "id": "activity",      "label": "Activity",              "max": 4 },
+        { "id": "vocalisation",  "label": "Vocalisation",          "max": 6 },
+        { "id": "expressivity",  "label": "Emotional expressivity","max": 4 },
+        { "id": "arousal",       "label": "State of apparent arousal", "max": 4 }
+      ]
+    },
+    "umss": {
+      "label": "University of Michigan Sedation Scale",
+      "range": [0, 4],
+      "source": "Malviya et al., Br J Anaesth 2002",
+      "options": [
+        "Awake and alert",
+        "Minimally sedated: tired/sleepy, appropriate response to conversation",
+        "Moderately sedated: somnolent/sleeping, easily roused with light tactile stimulation",
+        "Deeply sedated: deep sleep, rousable only with significant physical stimulation",
+        "Unrousable"
+      ]
+    }
+  },
+
+  "forms": [
+    {
+      "id": "00_device",
+      "title": "Device setup",
+      "cardinality": "local",
+      "sheet": null,
+      "note": "Stored on the tablet only. Never submitted as a record; stamped onto every submission.",
+      "sections": [
+        { "id": "provision", "title": "Provisioning", "items": [
+          { "id": "device_id",      "label": "Device",           "type": "computed", "derive": "device_id", "readOnly": true, "help": "Generated per browser. Collectors use their own phones, so nobody names a device." },
+          { "id": "site_code",      "label": "Site code",        "type": "text", "required": true, "pattern": "^[A-Z]{2}$" },
+          { "id": "camp_id",        "label": "Camp ID",          "type": "text", "required": true },
+          { "id": "endpoint_url",   "label": "Endpoint URL",     "type": "text", "required": true },
+          { "id": "device_token",   "label": "Your token",       "type": "secret", "required": true, "help": "Issued to you personally in the _raters tab. Do not share it — rows are attributed to whoever the token belongs to." },
+          { "id": "rater_id",       "label": "Your rater ID",    "type": "text", "required": true },
+          { "id": "rater_role",     "label": "Role",             "type": "select", "required": true, "options": ["Anaesthetist", "Surgeon", "PACU nurse", "Ward nurse", "Research assistant", "Coordinator"] },
+          { "id": "app_pin",        "label": "App PIN",          "type": "secret", "required": true, "help": "Required on launch and after 5 minutes idle. The tablet holds dates of birth." },
+          { "id": "calibrated",     "label": "Rater has passed M10 calibration", "type": "boolean", "required": true, "help": "If false the app runs in training mode and tags submissions training=1." }
+        ]}
+      ]
+    },
+
+    {
+      "id": "01_enrolment",
+      "title": "Enrolment, consent and assent",
+      "cardinality": "once",
+      "sheet": "01_enrolment",
+      "gatekeeper": true,
+      "note": "No other module may be opened for a study number until this form is complete.",
+      "sections": [
+        { "id": "identify", "title": "Identification", "items": [
+          { "id": "study_number", "label": "Study number", "type": "study_number", "required": true,
+            "pattern": "^PPP-[A-Z]{2}-\\d{4}-[0-9X]$",
+            "validate": ["check_character", "unique_against_roster"],
+            "help": "Type it exactly as written on the wristband. The last character is a check digit: if it does not match, the number was mistyped." },
+          { "id": "date_of_birth", "label": "Date of birth", "type": "date_parts", "required": true,
+            "identifier": true,
+            "echo": "computed_age_label",
+            "help": "Day / month / year pickers — never a typed date string. The computed age and the instrument it selects are echoed back immediately so a decade slip is caught at the bedside.",
+            "hardBlock": ["future_date", "age_over_max"] },
+          { "id": "computed_age_label", "label": "Age and instrument", "type": "computed", "derive": "age_label_with_instrument", "readOnly": true },
+          { "id": "enrolled_at", "label": "Enrolment date and time", "type": "datetime", "required": true, "default": "now" }
+        ]},
+        { "id": "eligibility", "title": "Eligibility", "items": [
+          { "id": "elig_elective",   "label": "Elective procedure on this camp list", "type": "boolean", "required": true },
+          { "id": "elig_age",        "label": "Age within protocol range",            "type": "computed", "derive": "age_in_range", "readOnly": true },
+          { "id": "elig_consent",    "label": "Legally authorised caregiver available to consent", "type": "boolean", "required": true },
+          { "id": "eligible",        "label": "Eligible",                              "type": "computed", "derive": "eligibility_all", "readOnly": true },
+          { "id": "screen_fail_reason", "label": "Reason not enrolled", "type": "select",
+            "showIf": { "field": "eligible", "op": "eq", "value": false }, "required": true,
+            "options": ["Emergency procedure", "Age outside range", "No caregiver available", "Caregiver declined", "Child declined assent", "Procedure cancelled", "Other"] }
+        ]},
+        { "id": "consent", "title": "Consent and assent", "items": [
+          { "id": "consent_obtained", "label": "Written caregiver consent obtained", "type": "boolean", "required": true,
+            "showIf": { "field": "eligible", "op": "eq", "value": true } },
+          { "id": "consent_form_version", "label": "Consent form version", "type": "text", "required": true, "showIf": { "field": "consent_obtained", "op": "eq", "value": true } },
+          { "id": "consent_language", "label": "Language of consent", "type": "select", "required": true, "showIf": { "field": "consent_obtained", "op": "eq", "value": true },
+            "options": ["English", "Kiswahili", "French", "Other"] },
+          { "id": "consent_at", "label": "Consent timestamp", "type": "datetime", "required": true, "showIf": { "field": "consent_obtained", "op": "eq", "value": true } },
+          { "id": "assent_required", "label": "Assent required (age >= 7 y)", "type": "computed", "derive": "assent_required", "readOnly": true },
+          { "id": "assent_obtained", "label": "Age-appropriate assent obtained", "type": "select", "required": true,
+            "showIf": { "field": "assent_required", "op": "eq", "value": true },
+            "options": ["Yes", "No — child declined", "No — child unable"] },
+          { "id": "caregiver_relationship", "label": "Consenting caregiver relationship", "type": "select", "required": true,
+            "options": ["Mother", "Father", "Grandparent", "Legal guardian", "Other relative"] }
+        ]}
+      ]
+    },
+
+    {
+      "id": "02_preop",
+      "title": "Preoperative baseline",
+      "cardinality": "once",
+      "sheet": "02_preop",
+      "sections": [
+        { "id": "demographics", "title": "Demographics and anthropometry", "items": [
+          { "id": "age_days",   "label": "Age (days)",   "type": "computed", "derive": "age_days", "readOnly": true },
+          { "id": "age_months", "label": "Age (months)", "type": "computed", "derive": "age_months", "readOnly": true },
+          { "id": "age_confirmed", "label": "Rater confirms the displayed age is correct", "type": "boolean", "required": true,
+            "help": "Age is derived from the date of birth recorded at enrolment. It is confirmed here, never re-entered." },
+          { "id": "sex", "label": "Sex", "type": "select", "required": true, "options": ["Male", "Female", "Not recorded"] },
+          { "id": "weight_kg", "label": "Weight", "type": "decimal", "required": true, "unit": "kg", "min": 0.5, "max": 120, "step": 0.1,
+            "warnIf": "weight_implausible_for_age", "help": "Drives every weight-adjusted dose check in the study. Weigh, do not estimate." },
+          { "id": "height_cm", "label": "Height / length", "type": "decimal", "required": true, "unit": "cm", "min": 30, "max": 200, "step": 0.5,
+            "warnIf": "height_implausible_for_age" },
+          { "id": "bmi", "label": "BMI", "type": "computed", "derive": "bmi", "unit": "kg/m2", "readOnly": true }
+        ]},
+        { "id": "clinical", "title": "Clinical status", "items": [
+          { "id": "asa", "label": "ASA physical status", "type": "select", "required": true, "options": ["I", "II", "III"] },
+          { "id": "diagnosis_icd11", "label": "Surgical diagnosis (ICD-11 code)", "type": "text", "required": true },
+          { "id": "diagnosis_detail", "label": "Diagnosis detail", "type": "textarea", "required": false, "freeText": true,
+            "help": "No names, no hospital numbers, no bed numbers." },
+          { "id": "procedure_category", "label": "Planned procedure", "type": "select", "required": true,
+            "options": ["Inguinal hernia repair", "Umbilical hernia repair", "Hydrocelectomy", "Orchidopexy", "Circumcision", "Cleft lip repair", "Cleft palate repair", "Limb / orthopaedic", "Excision of superficial mass", "Tonsillectomy / adenoidectomy", "Other"] },
+          { "id": "laterality", "label": "Laterality", "type": "select", "required": true, "options": ["Left", "Right", "Bilateral", "Midline / not applicable"] },
+          { "id": "chronic_pain_history", "label": "History of chronic pain", "type": "boolean", "required": true },
+          { "id": "prior_surgery", "label": "Previous surgery", "type": "boolean", "required": true },
+          { "id": "current_analgesics", "label": "Taking analgesics on admission", "type": "boolean", "required": true },
+          { "id": "cognitive_impairment", "label": "Cognitive or developmental impairment", "type": "boolean", "required": true,
+            "help": "If yes, all pain assessments route to revised FLACC regardless of age." },
+          { "id": "rflacc_behaviours", "label": "Individualised behaviours (from caregiver)", "type": "textarea",
+            "showIf": { "field": "cognitive_impairment", "op": "eq", "value": true }, "required": true, "freeText": false,
+            "help": "How this child usually shows pain. Required for revised FLACC." }
+        ]},
+        { "id": "baseline_affect", "title": "Baseline pain and anxiety", "items": [
+          { "id": "baseline_pain", "label": "Baseline pain at rest", "type": "pain_auto", "required": true },
+          { "id": "mypas_sf", "label": "m-YPAS Short Form", "type": "mypas_sf", "required": true },
+          { "id": "mypas_sf_score", "label": "m-YPAS-SF score", "type": "computed", "derive": "mypas_sf_score", "readOnly": true },
+          { "id": "caregiver_anxiety_vas", "label": "Caregiver anxiety (visual analogue)", "type": "slider", "required": true, "min": 0, "max": 100, "step": 1,
+            "anchors": { "low": "not at all anxious", "high": "extremely anxious" } },
+          { "id": "caregiver_language", "label": "Caregiver preferred language", "type": "select", "required": true, "options": ["English", "Kiswahili", "French", "Other"] }
+        ]}
+      ]
+    },
+
+    {
+      "id": "03_intraop",
+      "title": "Intraoperative record",
+      "cardinality": "once",
+      "sheet": "03_intraop",
+      "sections": [
+        { "id": "timings", "title": "Timings", "items": [
+          { "id": "anaesthesia_start", "label": "Anaesthesia start", "type": "datetime", "required": true },
+          { "id": "incision",          "label": "Incision",          "type": "datetime", "required": true },
+          { "id": "closure",           "label": "Closure",           "type": "datetime", "required": true },
+          { "id": "anaesthesia_end",   "label": "Anaesthesia end",   "type": "datetime", "required": true,
+            "help": "The anchor for every scheduled assessment. Record it accurately." },
+          { "id": "surgical_duration_min",   "label": "Surgical duration",   "type": "computed", "derive": "surgical_duration_min", "unit": "min", "readOnly": true },
+          { "id": "anaesthesia_duration_min","label": "Anaesthesia duration","type": "computed", "derive": "anaesthesia_duration_min", "unit": "min", "readOnly": true }
+        ]},
+        { "id": "surgery", "title": "Surgical data", "items": [
+          { "id": "procedure_performed", "label": "Procedure performed", "type": "select", "required": true, "sameOptionsAs": "procedure_category" },
+          { "id": "technique", "label": "Technique", "type": "select", "required": true, "options": ["Open", "Minimally invasive"] },
+          { "id": "incision_length_cm", "label": "Incision length", "type": "decimal", "required": true, "unit": "cm", "min": 0, "max": 60, "step": 0.5 },
+          { "id": "surgeon_grade", "label": "Primary operator", "type": "select", "required": true, "options": ["Consultant", "Fellow", "Registrar", "Medical officer"] }
+        ]},
+        { "id": "anaesthesia", "title": "Anaesthesia delivery", "items": [
+          { "id": "induction_route", "label": "Induction", "type": "select", "required": true, "options": ["Inhalational", "Intravenous", "Combined"] },
+          { "id": "airway", "label": "Airway", "type": "select", "required": true, "options": ["Facemask", "Supraglottic airway", "Tracheal tube", "Spontaneous / none"] },
+          { "id": "maintenance", "label": "Maintenance", "type": "select", "required": true, "options": ["Sevoflurane", "Isoflurane", "TIVA (propofol)", "Combined", "Sedation only"] },
+          { "id": "sevo_mac_hours", "label": "Sevoflurane exposure", "type": "decimal", "unit": "MAC-hours", "min": 0, "max": 20, "step": 0.1,
+            "showIf": { "field": "maintenance", "op": "in", "value": ["Sevoflurane", "Combined"] }, "required": true },
+          { "id": "propofol_total_mg", "label": "Total propofol", "type": "decimal", "unit": "mg", "min": 0, "max": 2000, "step": 1,
+            "showIf": { "field": "maintenance", "op": "in", "value": ["TIVA (propofol)", "Combined"] }, "required": true },
+          { "id": "intraop_opioids", "label": "Intraoperative opioids", "type": "drug_table", "required": true,
+            "drugSet": "fentanylEquivalents", "allowNone": true,
+            "columns": ["drug", "total_dose", "unit"] },
+          { "id": "fent_eq_mcg_per_kg", "label": "Fentanyl equivalents", "type": "computed", "derive": "fent_eq_mcg_per_kg", "unit": "mcg/kg", "readOnly": true }
+        ]},
+        { "id": "block", "title": "Regional blockade", "items": [
+          { "id": "block_performed", "label": "Regional block performed", "type": "boolean", "required": true },
+          { "id": "block_technique", "label": "Technique", "type": "select", "required": true,
+            "showIf": { "field": "block_performed", "op": "eq", "value": true },
+            "options": ["Caudal epidural", "Lumbar epidural", "Spinal", "Transversus abdominis plane", "Ilioinguinal / iliohypogastric", "Rectus sheath", "Erector spinae plane", "Penile", "Brachial plexus", "Femoral", "Adductor canal", "Popliteal sciatic", "Local infiltration only", "Other"] },
+          { "id": "block_guidance", "label": "Guidance", "type": "select", "required": true,
+            "showIf": { "field": "block_performed", "op": "eq", "value": true },
+            "options": ["Ultrasound", "Anatomical landmark", "Nerve stimulator", "Ultrasound + stimulator"] },
+          { "id": "block_timing", "label": "Timing", "type": "select", "required": true,
+            "showIf": { "field": "block_performed", "op": "eq", "value": true }, "options": ["Pre-incision", "Post-incision"] },
+          { "id": "block_at", "label": "Block performed at", "type": "datetime", "required": true,
+            "showIf": { "field": "block_performed", "op": "eq", "value": true },
+            "help": "Anchors block duration and the Barry rebound window." },
+          { "id": "la_agent", "label": "Local anaesthetic", "type": "select", "required": true,
+            "showIf": { "field": "block_performed", "op": "eq", "value": true },
+            "optionsFromParams": "localAnaesthetic.agents" },
+          { "id": "la_concentration_pct", "label": "Concentration", "type": "decimal", "required": true, "unit": "%", "min": 0.05, "max": 2, "step": 0.05,
+            "showIf": { "field": "block_performed", "op": "eq", "value": true } },
+          { "id": "la_volume_ml", "label": "Volume injected", "type": "decimal", "required": true, "unit": "mL", "min": 0.1, "max": 60, "step": 0.1,
+            "showIf": { "field": "block_performed", "op": "eq", "value": true } },
+          { "id": "la_with_epinephrine", "label": "With epinephrine", "type": "boolean", "required": true,
+            "showIf": { "field": "block_performed", "op": "eq", "value": true } },
+          { "id": "la_mg_per_kg", "label": "Weight-adjusted dose", "type": "computed", "derive": "la_mg_per_kg", "unit": "mg/kg", "readOnly": true,
+            "liveGuard": true, "hardBlock": ["la_over_max"],
+            "help": "Shown live as volume is typed. Amber at 80% of maximum, hard block above 100%." },
+          { "id": "la_pct_of_max", "label": "Percent of maximum", "type": "computed", "derive": "la_pct_of_max", "unit": "%", "readOnly": true },
+          { "id": "adjuvants", "label": "Perineural adjuvants", "type": "drug_table", "allowNone": true,
+            "showIf": { "field": "block_performed", "op": "eq", "value": true },
+            "drugOptions": ["Dexamethasone", "Dexmedetomidine", "Clonidine", "Epinephrine"],
+            "columns": ["drug", "dose", "unit"] },
+          { "id": "block_success", "label": "No haemodynamic response to incision", "type": "select",
+            "showIf": { "field": "block_performed", "op": "eq", "value": true }, "required": true,
+            "options": ["Yes — block effective", "No — response to incision", "Not assessable"] }
+        ]},
+        { "id": "multimodal", "title": "Systemic multimodal analgesia", "items": [
+          { "id": "paracetamol",   "label": "IV paracetamol",   "type": "dose_block", "unit": "mg/kg", "required": true },
+          { "id": "nsaid",         "label": "IV NSAID",         "type": "dose_block", "unit": "mg/kg", "required": true, "drugOptions": ["Ketorolac", "Ibuprofen", "Diclofenac"] },
+          { "id": "dexamethasone", "label": "IV dexamethasone",  "type": "dose_block", "unit": "mg/kg", "required": true },
+          { "id": "ketamine",      "label": "IV ketamine",       "type": "dose_block", "unit": "mg/kg", "required": true },
+          { "id": "lidocaine_iv",  "label": "IV lidocaine",      "type": "dose_block", "unit": "mg/kg", "required": true },
+          { "id": "magnesium",     "label": "IV magnesium",      "type": "dose_block", "unit": "mg/kg", "required": true },
+          { "id": "antiemetic",    "label": "Antiemetic",        "type": "dose_block", "unit": "mg/kg", "required": true, "drugOptions": ["Ondansetron", "Dexamethasone", "Both"] }
+        ]},
+        { "id": "intraop_events", "title": "Events", "items": [
+          { "id": "intraop_complication", "label": "Intraoperative complication", "type": "boolean", "required": true },
+          { "id": "intraop_complication_type", "label": "Complication", "type": "multiselect",
+            "showIf": { "field": "intraop_complication", "op": "eq", "value": true }, "required": true,
+            "options": ["Laryngospasm", "Bronchospasm", "Desaturation", "Bradycardia", "Hypotension", "Significant bleeding", "Failed block", "Dural puncture", "Other"] }
+        ]}
+      ]
+    },
+
+    {
+      "id": "04_pacu_t0",
+      "title": "PACU arrival — T0 adjudication",
+      "cardinality": "once",
+      "sheet": "04_pacu_t0",
+      "note": "FLACC and PAED are both mandatory here, at every age. This is the only form that collects two instruments.",
+      "sections": [
+        { "id": "arrival", "title": "Arrival", "items": [
+          { "id": "pacu_arrival_at", "label": "PACU arrival", "type": "datetime", "required": true, "default": "now" },
+          { "id": "flacc", "label": "FLACC", "type": "flacc", "required": true },
+          { "id": "flacc_total", "label": "FLACC total", "type": "computed", "derive": "flacc_total", "readOnly": true },
+          { "id": "paed", "label": "PAED", "type": "paed", "required": true },
+          { "id": "paed_total", "label": "PAED total", "type": "computed", "derive": "paed_total", "readOnly": true }
+        ]},
+        { "id": "gates", "title": "Behavioural gates", "items": [
+          { "id": "gate_eye_contact", "label": "Makes eye contact", "type": "boolean", "required": true },
+          { "id": "gate_purposeful",  "label": "Movement is purposeful", "type": "boolean", "required": true },
+          { "id": "gate_aware",       "label": "Aware of surroundings", "type": "boolean", "required": true },
+          { "id": "gate_consolable",  "label": "Consolable", "type": "boolean", "required": true }
+        ]},
+        { "id": "adjudication", "title": "Adjudication", "items": [
+          { "id": "proposed_class", "label": "Proposed classification", "type": "computed", "derive": "pacu_classification", "readOnly": true,
+            "help": "Advisory. The algorithm shows its reasoning; the nurse decides." },
+          { "id": "proposed_rationale", "label": "Why", "type": "computed", "derive": "pacu_classification_rationale", "readOnly": true },
+          { "id": "adjudicated_class", "label": "Nurse adjudication", "type": "select", "required": true,
+            "options": ["Nociception", "Emergence delirium", "Both", "Indeterminate — reassess"] },
+          { "id": "override_reason", "label": "Reason for differing from the proposal", "type": "select",
+            "showIf": { "field": "adjudicated_class", "op": "differs_from", "value": "proposed_class" }, "required": true,
+            "options": ["Behaviour changed since scoring", "Score does not reflect the child", "Known baseline behaviour", "Caregiver report", "Other"] },
+          { "id": "intervention", "label": "Immediate intervention", "type": "multiselect", "required": true,
+            "options": ["None", "Environmental calming", "Caregiver presence", "Non-opioid analgesia", "Opioid analgesia", "Low-dose sedative", "Other"] }
+        ]},
+        { "id": "discharge", "title": "PACU course", "items": [
+          { "id": "rr", "label": "Respiratory rate", "type": "integer", "unit": "/min", "min": 4, "max": 80, "required": true },
+          { "id": "spo2", "label": "SpO2", "type": "integer", "unit": "%", "min": 50, "max": 100, "required": true },
+          { "id": "hr", "label": "Heart rate", "type": "integer", "unit": "/min", "min": 30, "max": 220, "required": true },
+          { "id": "aldrete", "label": "Modified Aldrete score", "type": "integer", "min": 0, "max": 10, "required": true },
+          { "id": "pacu_discharge_at", "label": "PACU discharge", "type": "datetime", "required": true,
+            "warnIf": "aldrete_below_discharge_threshold" }
+        ]}
+      ]
+    },
+
+    {
+      "id": "05_pain_obs",
+      "title": "Serial pain assessment",
+      "cardinality": "repeating",
+      "sheet": "05_pain_obs",
+      "note": "One row per child per timepoint. Long format. Designed for under 45 seconds at the bedside.",
+      "naturalKey": ["study_number", "timepoint"],
+      "sections": [
+        { "id": "context", "title": "Context", "items": [
+          { "id": "timepoint", "label": "Timepoint", "type": "select", "required": true, "optionsFromParams": "assessmentSchedule.timepoints", "includeUnscheduled": true },
+          { "id": "assessed_at", "label": "Assessed at", "type": "datetime", "required": true, "default": "now" },
+          { "id": "on_time", "label": "Within window", "type": "computed", "derive": "on_time_flag", "readOnly": true },
+          { "id": "location", "label": "Location", "type": "select", "required": true, "options": ["PACU", "Ward", "Day-case bay", "Discharged — telephone follow-up"] },
+          { "id": "entry_mode", "label": "How was this recorded", "type": "select", "required": true,
+            "optionsFromParams": "dataCapture.entryModes", "default": "At the bedside",
+            "warnIf": "entry_lag_disagrees",
+            "help": "Answer honestly. Entering from notes or recall is expected and is not a protocol deviation — but it is weaker evidence, and the analysis needs to know which is which." },
+          { "id": "entry_lag_h", "label": "Entered after", "type": "computed", "derive": "entry_lag_h", "unit": "h", "readOnly": true },
+          { "id": "asleep", "label": "Child asleep", "type": "boolean", "required": true },
+          { "id": "not_assessed_reason", "label": "Reason not assessed", "type": "select",
+            "showIf": { "field": "asleep", "op": "eq", "value": true }, "required": true,
+            "options": ["Asleep — not woken", "Child refused", "Caregiver declined", "Clinically unstable", "Off ward for procedure", "Not located"] }
+        ]},
+        { "id": "pain", "title": "Pain", "items": [
+          { "id": "pain_rest", "label": "Pain at rest", "type": "pain_auto", "required": true,
+            "showIf": { "field": "asleep", "op": "ne", "value": true },
+            "warnIf": "pain_jump_from_previous" },
+          { "id": "dynamic_maneuver", "label": "Evoked manoeuvre", "type": "select", "required": true,
+            "showIf": { "field": "asleep", "op": "ne", "value": true },
+            "defaultFrom": "procedure_category",
+            "options": ["Cough", "Deep inspiration", "Assisted limb flexion", "Gentle palpation of surgical site", "Sitting up", "Not performed"] },
+          { "id": "pain_dynamic", "label": "Pain on movement", "type": "pain_auto", "required": true,
+            "showIf": { "field": "asleep", "op": "ne", "value": true },
+            "warnIf": "dynamic_below_rest" }
+        ]},
+        { "id": "safety", "title": "Sedation, vitals and block", "items": [
+          { "id": "umss", "label": "Sedation (UMSS)", "type": "umss", "required": true },
+          { "id": "nausea", "label": "Nausea / vomiting", "type": "select", "required": true, "options": ["None", "Nausea only", "Vomited"] },
+          { "id": "emesis_count", "label": "Emetic episodes since last assessment", "type": "integer", "min": 0, "max": 20,
+            "showIf": { "field": "nausea", "op": "eq", "value": "Vomited" }, "required": true },
+          { "id": "rr", "label": "Respiratory rate", "type": "integer", "unit": "/min", "min": 4, "max": 80, "required": true, "warnIf": "rr_below_age_threshold" },
+          { "id": "spo2", "label": "SpO2", "type": "integer", "unit": "%", "min": 50, "max": 100, "required": true, "warnIf": "spo2_below_threshold" },
+          { "id": "hr", "label": "Heart rate", "type": "integer", "unit": "/min", "min": 30, "max": 220, "required": true },
+          { "id": "sensory_block_present", "label": "Sensory block still present", "type": "select", "required": true,
+            "options": ["Yes", "No", "Unknown", "No block performed"],
+            "help": "The first 'No' opens the block resolution form." },
+          { "id": "rescue_given", "label": "Rescue analgesia given at this assessment", "type": "boolean", "required": true,
+            "help": "Opens the analgesia log so the dose is recorded, not remembered." }
+        ]}
+      ]
+    },
+
+    {
+      "id": "06_block_resolution",
+      "title": "Block resolution and rebound",
+      "cardinality": "once",
+      "sheet": "06_block_resolution",
+      "note": "Triggered when 05 first records sensory block absent; also openable ad hoc overnight.",
+      "sections": [
+        { "id": "regression", "title": "Regression", "items": [
+          { "id": "sensory_return_at", "label": "Sensory return", "type": "datetime", "required": true },
+          { "id": "ascertainment", "label": "How ascertained", "type": "select", "required": true,
+            "options": ["Child reported sensation", "Cold / touch testing", "Return of motor function", "Onset of pain", "Caregiver report"] },
+          { "id": "motor_return_at", "label": "Motor return", "type": "datetime", "required": false },
+          { "id": "block_duration_h", "label": "Block duration", "type": "computed", "derive": "block_duration_h", "unit": "h", "readOnly": true },
+          { "id": "regression_clock_time", "label": "Clock time of regression", "type": "computed", "derive": "regression_clock_time", "readOnly": true,
+            "help": "Captures overnight regression, the highest-risk pattern." }
+        ]},
+        { "id": "rebound", "title": "Rebound", "items": [
+          { "id": "pain_before_regression", "label": "Pain immediately before regression", "type": "pain_auto", "required": true },
+          { "id": "pain_plus_1h", "label": "Pain at +1 h", "type": "pain_auto", "required": true },
+          { "id": "pain_plus_2h", "label": "Pain at +2 h", "type": "pain_auto", "required": true },
+          { "id": "rescue_requested", "label": "Rescue analgesia requested", "type": "boolean", "required": true },
+          { "id": "rebound_protocol", "label": "Rebound (protocol definition)", "type": "computed", "derive": "rebound_protocol", "readOnly": true },
+          { "id": "rebound_barry", "label": "Rebound (Barry 2021 definition)", "type": "computed", "derive": "rebound_barry", "readOnly": true },
+          { "id": "rebound_confirmed", "label": "Nurse confirms rebound occurred", "type": "select", "required": true,
+            "options": ["Yes", "No", "Uncertain"] }
+        ]}
+      ]
+    },
+
+    {
+      "id": "07_analgesia_log",
+      "title": "Analgesia administration log",
+      "cardinality": "repeating",
+      "sheet": "07_analgesia_log",
+      "note": "One row per dose. Scheduled and rescue are separated so breakthrough pain can be isolated from baseline control.",
+      "sections": [
+        { "id": "dose", "title": "Dose", "items": [
+          { "id": "given_at", "label": "Given at", "type": "datetime", "required": true, "default": "now" },
+          { "id": "drug", "label": "Drug", "type": "select", "required": true,
+            "options": ["Paracetamol", "Ibuprofen", "Diclofenac", "Ketorolac", "Morphine", "Fentanyl", "Oxycodone", "Hydromorphone", "Tramadol", "Codeine", "Ketamine", "Other"],
+            "warnIf": "restricted_for_age" },
+          { "id": "dose_amount", "label": "Dose", "type": "decimal", "required": true, "min": 0, "max": 5000, "step": 0.1,
+            "help": "A wide bound only, because units vary from mcg to mg. The real guard is the weight-adjusted dose derived below." },
+          { "id": "dose_unit", "label": "Unit", "type": "select", "required": true, "options": ["mg", "mcg", "mL"] },
+          { "id": "route", "label": "Route", "type": "select", "required": true, "options": ["IV", "Oral", "Rectal", "IM", "Subcutaneous"] },
+          { "id": "indication", "label": "Indication", "type": "select", "required": true,
+            "options": ["Scheduled / around the clock", "PRN rescue", "Pre-emptive"],
+            "help": "The scheduled versus rescue split is the study's breakthrough-pain signal. Do not default it." },
+          { "id": "dose_mg_per_kg", "label": "Weight-adjusted dose", "type": "computed", "derive": "dose_mg_per_kg", "unit": "mg/kg", "readOnly": true },
+          { "id": "mme", "label": "Oral morphine equivalents", "type": "computed", "derive": "dose_mme", "unit": "mg OME", "readOnly": true }
+        ]},
+        { "id": "effect", "title": "Effect", "items": [
+          { "id": "pain_before", "label": "Pain immediately before", "type": "pain_auto", "required": true },
+          { "id": "pain_after", "label": "Pain at 30-60 min after", "type": "pain_auto", "required": false },
+          { "id": "prescriber", "label": "Ordered by", "type": "select", "required": true, "options": ["Anaesthetist", "Surgeon", "Medical officer", "Standing order"] }
+        ]}
+      ]
+    },
+
+    {
+      "id": "08_adverse_events",
+      "title": "Adverse events",
+      "cardinality": "repeating",
+      "sheet": "08_adverse_events",
+      "sections": [
+        { "id": "event", "title": "Event", "items": [
+          { "id": "onset_at", "label": "Onset", "type": "datetime", "required": true },
+          { "id": "event_type", "label": "Event", "type": "select", "required": true,
+            "options": ["Postoperative nausea and vomiting", "Pruritus", "Urinary retention", "Oversedation (UMSS >= 3)", "Respiratory depression", "Local anaesthetic systemic toxicity", "Block-related complication", "Surgical site complication", "Unplanned reoperation", "Unplanned readmission", "Other"] },
+          { "id": "severity", "label": "Severity grade", "type": "select", "required": true,
+            "options": ["1 — mild", "2 — moderate", "3 — severe", "4 — life-threatening"],
+            "escalateIf": ["3 — severe", "4 — life-threatening"] },
+          { "id": "action", "label": "Action taken", "type": "multiselect", "required": true,
+            "options": ["None", "Observation", "Drug treatment", "Naloxone", "Oxygen", "Airway support", "Fluid bolus", "Return to theatre", "Escalation to PI"] },
+          { "id": "outcome", "label": "Outcome", "type": "select", "required": true,
+            "options": ["Resolved", "Resolving", "Ongoing at 48 h", "Sequelae", "Fatal"] },
+          { "id": "related_to_analgesia", "label": "Judged related to analgesic management", "type": "select", "required": true,
+            "options": ["Unrelated", "Possibly", "Probably", "Definitely"] },
+          { "id": "ae_narrative", "label": "Narrative", "type": "textarea", "required": true, "freeText": true,
+            "help": "No names, no hospital numbers, no bed numbers." }
+        ]}
+      ]
+    },
+
+    {
+      "id": "09_exit",
+      "title": "48-hour exit and recovery milestones",
+      "cardinality": "once",
+      "sheet": "09_exit",
+      "sections": [
+        { "id": "milestones", "title": "Recovery milestones", "items": [
+          { "id": "first_oral_liquid_at", "label": "First oral liquid", "type": "datetime", "required": false },
+          { "id": "first_solid_at", "label": "First solid food", "type": "datetime", "required": false },
+          { "id": "first_void_at", "label": "First void", "type": "datetime", "required": false },
+          { "id": "ambulation_at", "label": "Unassisted ambulation", "type": "datetime", "required": false,
+            "help": "Age-adapted: for pre-ambulatory infants record return to normal spontaneous movement." },
+          { "id": "ambulation_na", "label": "Not applicable — pre-ambulatory", "type": "boolean", "required": true },
+          { "id": "awakenings_night1", "label": "Nocturnal awakenings, night 1", "type": "integer", "min": 0, "max": 30, "required": true },
+          { "id": "awakenings_night2", "label": "Nocturnal awakenings, night 2", "type": "integer", "min": 0, "max": 30, "required": true }
+        ]},
+        { "id": "satisfaction", "title": "Caregiver and child report", "items": [
+          { "id": "caregiver_satisfaction", "label": "Caregiver satisfaction with pain management", "type": "slider", "min": 0, "max": 10, "step": 1, "required": true,
+            "anchors": { "low": "not at all satisfied", "high": "completely satisfied" } },
+          { "id": "analgesia_adequate", "label": "Caregiver judged analgesia adequate", "type": "select", "required": true,
+            "options": ["Yes, throughout", "Mostly", "Sometimes inadequate", "Frequently inadequate"] },
+          { "id": "child_global_impression", "label": "Child global impression of recovery", "type": "select", "required": false,
+            "showIf": { "field": "age_years", "op": "gte", "value": 6 },
+            "options": ["Much better", "Better", "About the same", "Worse"] }
+        ]},
+        { "id": "closeout", "title": "Close-out", "items": [
+          { "id": "discharge_at", "label": "Discharge", "type": "datetime", "required": true },
+          { "id": "discharge_analgesia", "label": "Discharge analgesia supplied", "type": "multiselect", "required": true,
+            "options": ["None", "Paracetamol", "Ibuprofen", "Other NSAID", "Weak opioid", "Strong opioid"] },
+          { "id": "deviation", "label": "Protocol deviation occurred", "type": "boolean", "required": true },
+          { "id": "deviation_detail", "label": "Deviation detail", "type": "textarea", "freeText": true,
+            "showIf": { "field": "deviation", "op": "eq", "value": true }, "required": true },
+          { "id": "completion_status", "label": "Completion status", "type": "select", "required": true,
+            "options": ["Completed 48 h", "Early discharge — follow-up by telephone", "Early discharge — no follow-up", "Lost to follow-up", "Withdrawn by caregiver", "Withdrawn by investigator"] },
+          { "id": "withdrawal_reason", "label": "Reason", "type": "textarea",
+            "showIf": { "field": "completion_status", "op": "in", "value": ["Withdrawn by caregiver", "Withdrawn by investigator"] }, "required": true }
+        ]}
+      ]
+    },
+
+    {
+      "id": "10_calibration",
+      "title": "Rater calibration",
+      "cardinality": "repeating",
+      "sheet": "10_calibration",
+      "note": "Pre-camp and mid-camp. Raters below the kappa gate stay in training mode.",
+      "sections": [
+        { "id": "vignette", "title": "Vignette scoring", "items": [
+          { "id": "round", "label": "Calibration round", "type": "select", "required": true, "options": ["Pre-camp", "Mid-camp drift check"] },
+          { "id": "vignette_id", "label": "Vignette", "type": "text", "required": true },
+          { "id": "instrument", "label": "Instrument", "type": "select", "required": true, "options": ["FLACC", "FPS-R", "PAED"] },
+          { "id": "score", "label": "Score", "type": "integer", "required": true, "min": 0, "max": 20 },
+          { "id": "scored_at", "label": "Scored at", "type": "datetime", "required": true, "default": "now" }
+        ]}
+      ]
+    }
+  ]
+}

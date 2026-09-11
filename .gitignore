@@ -1,0 +1,17 @@
+# The study plan manuscript and its Word lock file — the author's draft,
+# not part of the application.
+*.docx
+~$*
+
+# Local scratch
+memory.txt
+node_modules/
+.DS_Store
+
+# The deployed endpoint URL. Not a secret in itself, but it is the write
+# surface for an identifiable dataset and there is no reason to publish it.
+# Each collector enters it once in Settings.
+endpoint.txt
+
+# Local, uncommitted references (workbook + endpoint URLs)
+LOCAL.md

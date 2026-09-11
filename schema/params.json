@@ -1,0 +1,178 @@
+{
+  "paramsVersion": "1.0.0",
+  "lastReviewed": "2026-09-11",
+  "countersignedBy": null,
+  "countersignedOn": null,
+  "_note": "Every value here is a protocol parameter with a published source. Changing any of them changes a study endpoint. Bump paramsVersion, record the countersignature, and never edit mid-camp.",
+
+  "routing": {
+    "_source": "Merkel 1997 (FLACC); Hicks 2001 (FPS-R, validated 4-12y); von Baeyer 2009 (NRS-11 from age 8); Malviya 2006 (r-FLACC).",
+    "_basis": "Routing uses COMPLETED CALENDAR AGE, not a fixed day count. 'Age 4' means the fourth birthday has passed. Four- and eight-year spans happen to be a stable 1461 and 2922 days, but the other protocol boundaries are not: seven years (assent) is 2556 or 2557 days, eighteen years (enrolment ceiling) is 6574 or 6575, and six completed months (local anaesthetic reduction) is 181 or 182. Expressing every boundary as a birthday keeps them consistent and auditable. age_days is recorded as a modelling covariate only.",
+    "flaccMaxYears": 3,
+    "fpsrMinYears": 4,
+    "fpsrMaxYears": 7,
+    "nrsMinYears": 8,
+    "assentMinYears": 7,
+    "minEnrolmentYears": 0,
+    "maxEnrolmentYears": 17
+  },
+
+  "painBands": {
+    "_source": "Serlin 1995; applied to pediatric self-report per von Baeyer. Common metric across FLACC, FPS-R and NRS.",
+    "none": [0, 0],
+    "mild": [1, 3],
+    "moderate": [4, 6],
+    "severe": [7, 10]
+  },
+
+  "thresholds": {
+    "flaccIntervene": 4,
+    "flaccInterveneSource": "Merkel 1997; Voepel-Lewis",
+    "paedEdCutoff": 10,
+    "paedEdCutoffSensitivity": 12,
+    "paedSource": "Sikich & Lerman, Anesthesiology 2004",
+    "mypasSfCutoff": 30,
+    "mypasSource": "Kain 1997; Jenkins, Anesth Analg 2014 (short form)",
+    "umssOversedation": 3,
+    "umssSource": "Malviya, Br J Anaesth 2002",
+    "aldreteDischarge": 9,
+    "aldreteSource": "Aldrete, J Clin Anesth 1995",
+    "irrKappaGate": 0.81,
+    "irrKappaSource": "Landis & Koch, Biometrics 1977 (lower bound of 'almost perfect')",
+    "clusterMinProportion": 0.05,
+    "clusterSource": "Nagin & Odgers, Annu Rev Clin Psychol 2010",
+    "wellControlled": 3,
+    "moderateToSevere": 4,
+    "severePain": 7
+  },
+
+  "breakthroughPain": {
+    "_definition": "bt_pain_24h = 1 if, within windowHours of anaesthesia end, any rest or dynamic score >= scoreThreshold, OR any PRN rescue analgesic administered.",
+    "windowHours": 24,
+    "scoreThreshold": 4,
+    "rescueCountsAnyRoute": true,
+    "sensitivityAnalysisIvOnly": true
+  },
+
+  "rebound": {
+    "_note": "Both definitions are derived from the same rows. rebound_protocol is primary; rebound_barry is reported for external comparability.",
+    "protocol": {
+      "anchor": "sensory_regression",
+      "windowHours": 2,
+      "fromAtMost": 3,
+      "toAtLeast": 7,
+      "requireRescue": true
+    },
+    "barry": {
+      "anchor": "block_placement",
+      "windowHours": 24,
+      "fromAtMost": 3,
+      "toAtLeast": 7,
+      "requireRescue": false,
+      "_source": "Barry et al., Br J Anaesth 2021"
+    }
+  },
+
+  "localAnaesthetic": {
+    "_source": "ESRA/ASRA joint practice advisory, Ivani et al., Reg Anesth Pain Med 2015. Single-shot maxima.",
+    "warnFractionOfMax": 0.8,
+    "infantReductionMaxMonths": 5,
+    "infantReductionFactor": 0.7,
+    "infantReductionNote": "Reduce by 30% under 6 completed months for immature hepatic clearance and low alpha-1-acid glycoprotein.",
+    "agents": {
+      "bupivacaine":     { "label": "Bupivacaine",     "maxMgPerKg": 2.5 },
+      "levobupivacaine": { "label": "Levobupivacaine", "maxMgPerKg": 2.5 },
+      "ropivacaine":     { "label": "Ropivacaine",     "maxMgPerKg": 3.0 },
+      "lidocaine":       { "label": "Lidocaine",       "maxMgPerKg": 5.0, "maxMgPerKgWithEpi": 7.0 }
+    }
+  },
+
+  "opioids": {
+    "mme": {
+      "_source": "CDC 2022 Clinical Practice Guideline conversion table. Factors convert an administered dose to oral morphine milligram equivalents.",
+      "factors": {
+        "morphine_po":      { "label": "Morphine (oral)",       "unit": "mg",  "factor": 1 },
+        "morphine_iv":      { "label": "Morphine (IV/SC)",      "unit": "mg",  "factor": 3 },
+        "oxycodone_po":     { "label": "Oxycodone (oral)",      "unit": "mg",  "factor": 1.5 },
+        "hydromorphone_po": { "label": "Hydromorphone (oral)",  "unit": "mg",  "factor": 5 },
+        "hydromorphone_iv": { "label": "Hydromorphone (IV)",    "unit": "mg",  "factor": 20 },
+        "fentanyl_iv":      { "label": "Fentanyl (IV)",         "unit": "mcg", "factor": 0.3 },
+        "tramadol_po":      { "label": "Tramadol (oral)",       "unit": "mg",  "factor": 0.1 },
+        "codeine_po":       { "label": "Codeine (oral)",        "unit": "mg",  "factor": 0.15 }
+      }
+    },
+    "fentanylEquivalents": {
+      "_note": "Intraoperative opioid load, expressed as mcg fentanyl equivalents.",
+      "factors": {
+        "fentanyl":      { "label": "Fentanyl",      "unit": "mcg", "factor": 1 },
+        "remifentanil":  { "label": "Remifentanil",  "unit": "mcg", "factor": 1 },
+        "sufentanil":    { "label": "Sufentanil",    "unit": "mcg", "factor": 10 },
+        "morphine":      { "label": "Morphine",      "unit": "mg",  "factor": 10 },
+        "hydromorphone": { "label": "Hydromorphone", "unit": "mg",  "factor": 66.7 }
+      }
+    }
+  },
+
+  "restrictedDrugs": {
+    "_source": "FDA 2017 safety communication: CYP2D6 ultra-rapid metaboliser risk.",
+    "_behaviour": "Never blocks. The entry is recorded because refusing to record what happened corrupts the dataset; it is flagged to _qc for same-shift PI review.",
+    "codeine_po": { "maxYearsContraindicated": 11, "alsoContraindicatedAfter": ["Tonsillectomy / adenoidectomy"], "postOpMaxYears": 17 },
+    "tramadol_po": { "maxYearsContraindicated": 11, "alsoContraindicatedAfter": ["Tonsillectomy / adenoidectomy"], "postOpMaxYears": 17 }
+  },
+
+  "respiratoryDepression": {
+    "_definition": "Any one trigger opens M8 with the event pre-classified and raises the severity banner.",
+    "spo2MinPercent": 92,
+    "naloxoneIsTrigger": true,
+    "respiratoryRateThresholds": [
+      { "maxYears": 0,    "minRatePerMin": 20, "label": "under 1 year" },
+      { "maxYears": 3,    "minRatePerMin": 16, "label": "1 to 3 years" },
+      { "maxYears": 12,   "minRatePerMin": 14, "label": "4 to 12 years" },
+      { "maxYears": null, "minRatePerMin": 12, "label": "over 12 years" }
+    ]
+  },
+
+  "assessmentSchedule": {
+    "_anchor": "anaesthesia_end",
+    "_note": "T0 is anchored to PACU arrival, not to the offset; every other timepoint is offset from anaesthesia end.",
+    "timepoints": [
+      { "id": "T0",     "label": "PACU arrival", "offsetHours": 0,    "windowMinutes": null, "anchor": "pacu_arrival", "rest": true, "dynamic": false, "vitals": true },
+      { "id": "T0_5",   "label": "T+0.5 h",      "offsetHours": 0.5,  "windowMinutes": 15,   "anchor": "anaesthesia_end", "rest": true, "dynamic": false, "vitals": true },
+      { "id": "T1",     "label": "T+1 h",        "offsetHours": 1,    "windowMinutes": 15,   "anchor": "anaesthesia_end", "rest": true, "dynamic": true,  "vitals": true },
+      { "id": "T2",     "label": "T+2 h",        "offsetHours": 2,    "windowMinutes": 15,   "anchor": "anaesthesia_end", "rest": true, "dynamic": true,  "vitals": true },
+      { "id": "T4",     "label": "T+4 h",        "offsetHours": 4,    "windowMinutes": 30,   "anchor": "anaesthesia_end", "rest": true, "dynamic": true,  "vitals": true },
+      { "id": "T6",     "label": "T+6 h",        "offsetHours": 6,    "windowMinutes": 30,   "anchor": "anaesthesia_end", "rest": true, "dynamic": true,  "vitals": true },
+      { "id": "T8",     "label": "T+8 h",        "offsetHours": 8,    "windowMinutes": 30,   "anchor": "anaesthesia_end", "rest": true, "dynamic": true,  "vitals": true },
+      { "id": "T12",    "label": "T+12 h",       "offsetHours": 12,   "windowMinutes": 30,   "anchor": "anaesthesia_end", "rest": true, "dynamic": true,  "vitals": true },
+      { "id": "T18",    "label": "T+18 h",       "offsetHours": 18,   "windowMinutes": 60,   "anchor": "anaesthesia_end", "rest": true, "dynamic": true,  "vitals": true },
+      { "id": "T24",    "label": "T+24 h",       "offsetHours": 24,   "windowMinutes": 60,   "anchor": "anaesthesia_end", "rest": true, "dynamic": true,  "vitals": true },
+      { "id": "T30",    "label": "T+30 h",       "offsetHours": 30,   "windowMinutes": 60,   "anchor": "anaesthesia_end", "rest": true, "dynamic": false, "vitals": true },
+      { "id": "T36",    "label": "T+36 h",       "offsetHours": 36,   "windowMinutes": 60,   "anchor": "anaesthesia_end", "rest": true, "dynamic": true,  "vitals": true },
+      { "id": "T48",    "label": "T+48 h",       "offsetHours": 48,   "windowMinutes": 90,   "anchor": "anaesthesia_end", "rest": true, "dynamic": true,  "vitals": true }
+    ],
+    "unscheduledId": "UNSCHED",
+    "completenessFloor": 0.7
+  },
+
+  "dataCapture": {
+    "_note": "Assessments will not always be entered at the bedside. Patient-to-clinician ratios, emergencies and ward logistics mean some are written on paper and typed up later, and a few are reconstructed from recall. That is a fact about the study, so it is recorded as a variable rather than hidden: entry_mode is a data-quality covariate and belongs in the analysis, not in a footnote.",
+    "entryModes": ["At the bedside", "From written notes", "From recall"],
+    "entryLagWarnHours": 2,
+    "recallModeMaxHours": 24,
+    "_basis": "A FLACC score reconstructed from memory is weaker evidence than one scored at the cot side. Sensitivity analyses should be able to exclude it."
+  },
+
+  "privacy": {
+    "_note": "Enforced by tests/schema.test.js. A build fails if any form outside identifierAllowedForms declares a field in identifierFields.",
+    "identifierFields": ["date_of_birth"],
+    "identifierAllowedForms": ["01_enrolment"],
+    "excludeFromAnalysisExtract": ["date_of_birth"],
+    "freeTextFields": ["diagnosis_detail", "ae_narrative", "deviation_detail"]
+  },
+
+  "studyNumber": {
+    "pattern": "^PPP-[A-Z]{2}-\\d{4}-[0-9X]$",
+    "checkCharacter": "mod11",
+    "example": "PPP-KN-0147-0"
+  }
+}

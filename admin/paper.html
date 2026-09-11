@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PPP eCRF — bedside tally sheet</title>
+<style>
+/*
+ * A paper fallback, printed from the browser. No app, no phone, no signal.
+ *
+ * This exists because collection will not always happen in real time: at bad
+ * patient-to-clinician ratios, or during an emergency, nobody is holding a
+ * phone. The alternative to paper is entry from recall, which is the weakest
+ * evidence the study can collect. A sheet clipped to the cot converts that
+ * into "from written notes", which is defensible.
+ */
+
+:root { --ink: #111; --rule: #999; --faint: #ddd; }
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; padding: 16px;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ink); background: #fff; font-size: 14px;
+}
+
+.controls {
+  max-width: 900px; margin: 0 auto 20px;
+  padding: 14px; border: 1px solid var(--rule); border-radius: 8px; background: #f6f6f6;
+}
+.controls h1 { margin: 0 0 6px; font-size: 1.1rem; }
+.controls p { margin: 0 0 10px; font-size: 0.85rem; color: #444; }
+.controls label { font-size: 0.85rem; margin-right: 6px; }
+.controls input, .controls select { padding: 6px 8px; font: inherit; border: 1px solid var(--rule); border-radius: 4px; }
+.controls button {
+  padding: 8px 16px; font: inherit; font-weight: 600; cursor: pointer;
+  border: 1px solid #0b6e63; border-radius: 6px; background: #0b6e63; color: #fff;
+}
+
+.sheet { max-width: 1000px; margin: 0 auto; }
+
+.head { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 8px; }
+.head h2 { margin: 0; font-size: 1.05rem; }
+.head .sub { font-size: 0.75rem; color: #555; }
+
+.idbar { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 10px; font-size: 0.85rem; }
+.idbar > div { display: flex; align-items: baseline; gap: 6px; }
+/* inline-block, or min-width is ignored and there is nowhere to write */
+.idbar span { display: inline-block; border-bottom: 1px solid var(--ink); min-width: 130px; height: 1.1em; }
+.idbar b { font-weight: 600; white-space: nowrap; }
+
+.scale-pick { margin-bottom: 10px; font-size: 0.85rem; }
+.scale-pick em { font-style: normal; padding: 1px 8px; border: 1px solid var(--ink); border-radius: 999px; margin-right: 6px; }
+
+table { border-collapse: collapse; width: 100%; }
+th, td { border: 1px solid var(--rule); padding: 0; text-align: center; }
+thead th {
+  font-size: 0.62rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em;
+  padding: 4px 2px; background: #eee; line-height: 1.2;
+}
+tbody td { height: 30px; }
+tbody th {
+  font-size: 0.72rem; font-weight: 600; text-align: left;
+  padding: 0 6px; white-space: nowrap; background: #f6f6f6;
+}
+tbody tr.key td { background: #fbfbfb; }
+.narrow { width: 42px; }
+.mid { width: 62px; }
+
+.ref { margin-top: 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; font-size: 0.68rem; }
+.ref h3 { margin: 0 0 4px; font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.ref table { font-size: 0.66rem; }
+.ref td, .ref th { padding: 2px 4px; text-align: left; height: auto; }
+
+.footnote {
+  margin-top: 12px; padding: 8px 10px; border: 1px solid var(--ink);
+  font-size: 0.72rem; line-height: 1.4;
+}
+.footnote b { font-weight: 700; }
+
+@media print {
+  @page { size: A4 landscape; margin: 10mm; }
+  body { padding: 0; font-size: 11px; }
+  .controls { display: none; }
+  .sheet { max-width: none; }
+  tbody td { height: 26px; }
+}
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <h1>Bedside tally sheet</h1>
+  <p>
+    Print one per child and clip it to the cot. Use it when nobody can hold a
+    phone. Enter it into the app afterwards and tick <b>From written notes</b> —
+    not <em>From recall</em>.
+  </p>
+  <label for="studyNumber">Study number</label>
+  <input id="studyNumber" placeholder="PPP-KN-0147-0" size="16" autocomplete="off">
+  <label for="copies">Copies</label>
+  <select id="copies"><option>1</option><option>5</option><option>10</option><option>20</option></select>
+  <button id="print">Print</button>
+</div>
+
+<div id="sheets"></div>
+
+<script type="module">
+const params = await fetch('../schema/params.json').then((r) => r.json());
+
+function sheet(studyNumber) {
+  const tps = params.assessmentSchedule.timepoints;
+  const bands = params.painBands;
+
+  const rows = tps.map((tp) => `
+    <tr>
+      <th>${tp.label}</th>
+      <td class="mid"></td>
+      <td class="narrow"></td>
+      <td class="narrow">${tp.dynamic ? '' : '<span style="color:#bbb">—</span>'}</td>
+      <td class="narrow"></td>
+      <td class="narrow"></td>
+      <td class="narrow"></td>
+      <td class="narrow"></td>
+      <td class="narrow"></td>
+      <td class="narrow"></td>
+      <td class="mid"></td>
+    </tr>`).join('');
+
+  return `
+  <div class="sheet">
+    <div class="head">
+      <div>
+        <h2>Perioperative pain — bedside tally</h2>
+        <div class="sub">Times are from <b>anaesthesia end</b>. Write the real clock time you assessed, even if late.</div>
+      </div>
+      <div class="sub">CRF v${params.paramsVersion} · page 1 of 1</div>
+    </div>
+
+    <div class="idbar">
+      <div><b>Study number</b> <span>${studyNumber || ''}</span></div>
+      <div><b>Age</b> <span></span></div>
+      <div><b>Weight (kg)</b> <span></span></div>
+      <div><b>Anaesthesia end</b> <span></span></div>
+      <div><b>Recorded by</b> <span></span></div>
+    </div>
+
+    <div class="scale-pick">
+      <b>Circle the scale this child is on:</b>
+      <em>FLACC</em> under 4 y or non-verbal &nbsp;
+      <em>FPS-R</em> 4–7 y &nbsp;
+      <em>NRS</em> 8 y and over &nbsp;
+      <em>r-FLACC</em> cognitive impairment, any age
+    </div>
+
+    <table>
+      <thead>
+        <tr>
+          <th style="text-align:left">Timepoint</th>
+          <th>Clock time<br>assessed</th>
+          <th>Pain<br>rest</th>
+          <th>Pain<br>moving</th>
+          <th>Sedation<br>UMSS 0–4</th>
+          <th>Resp<br>rate</th>
+          <th>SpO₂<br>%</th>
+          <th>Heart<br>rate</th>
+          <th>Block<br>still on?</th>
+          <th>Rescue<br>given?</th>
+          <th>Initials</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+
+    <div class="ref">
+      <div>
+        <h3>FLACC — score each 0–2, total 0–10</h3>
+        <table>
+          <tr><th>Face</th><td>0 none · 1 occasional grimace · 2 constant frown, clenched jaw</td></tr>
+          <tr><th>Legs</th><td>0 relaxed · 1 uneasy, tense · 2 kicking, drawn up</td></tr>
+          <tr><th>Activity</th><td>0 lying quietly · 1 squirming, tense · 2 arched, rigid, jerking</td></tr>
+          <tr><th>Cry</th><td>0 none · 1 moans, whimpers · 2 crying steadily, screams</td></tr>
+          <tr><th>Consolability</th><td>0 content · 1 reassured by touch or talk · 2 hard to console</td></tr>
+        </table>
+      </div>
+      <div>
+        <h3>Reading the score</h3>
+        <table>
+          <tr><th>0</th><td>none</td><th>${bands.mild[0]}–${bands.mild[1]}</th><td>mild</td></tr>
+          <tr><th>${bands.moderate[0]}–${bands.moderate[1]}</th><td>moderate</td><th>${bands.severe[0]}–${bands.severe[1]}</th><td>severe</td></tr>
+        </table>
+        <h3 style="margin-top:8px">Act on it</h3>
+        <table>
+          <tr><td>Score ${params.thresholds.flaccIntervene} or more — give analgesia per protocol, then log the dose.</td></tr>
+          <tr><td>Block wearing off and pain jumping — record the time it wore off.</td></tr>
+          <tr><td>Any severe event — tell the site PI the same shift.</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="footnote">
+      <b>Pain on movement</b> means during coughing, a deep breath, sitting up, or
+      gentle movement of the operated part — assessing at rest alone
+      underestimates pain, because children lie still to avoid it.
+      <b>Enter this sheet into the app within 24 hours</b> and select
+      <b>From written notes</b>. Keep the paper until the study number appears in
+      the workbook.
+    </div>
+  </div>`;
+}
+
+function render() {
+  const n = Number(document.getElementById('copies').value);
+  const sn = document.getElementById('studyNumber').value.trim().toUpperCase();
+  document.getElementById('sheets').innerHTML =
+    Array.from({ length: n }, () => sheet(n === 1 ? sn : '')).join(
+      '<div style="page-break-after:always;height:14px"></div>');
+}
+
+document.getElementById('print').addEventListener('click', () => { render(); print(); });
+document.getElementById('studyNumber').addEventListener('input', render);
+document.getElementById('copies').addEventListener('change', render);
+render();
+</script>
+</body>
+</html>

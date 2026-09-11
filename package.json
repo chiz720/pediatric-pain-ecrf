@@ -1,0 +1,12 @@
+{
+  "name": "pediatric-pain-ecrf",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Offline-first eCRF for prospective perioperative pediatric pain assessment in high-volume surgical camps.",
+  "scripts": {
+    "test": "node --test 'tests/**/*.test.js'",
+    "test:watch": "node --test --watch 'tests/**/*.test.js'"
+  },
+  "engines": { "node": ">=20" }
+}
