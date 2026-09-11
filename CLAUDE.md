@@ -126,6 +126,11 @@ No dependencies and no install step. Node 20+.
 - `tests/appsScript.test.js` runs `Code.gs` in a VM sandbox with fake Google
   services. Editing the endpoint without running it there means shipping
   untested code to a place you cannot debug.
+- **Changing `Code.gs` needs TWO manual steps by the owner: paste the file into
+  the Apps Script editor, *then* deploy a new version.** Saying "redeploy"
+  alone is not enough and has already cost one debugging round — redeploy
+  republishes whatever is in the editor. A sudden `unauthorised` on writes is
+  the signature of a stale paste.
 
 ## The form is the product
 

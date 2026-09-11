@@ -253,50 +253,33 @@ test('every request is logged with its sync latency', () => {
   assert.ok(row[headers.indexOf('max_latency_s')] > 0);
 });
 
-/* ---------------- the promise that matters ---------------- */
+/* ---------------- surface area ---------------- */
 
-test('the roster never returns a date of birth', () => {
+test('the endpoint does exactly two things: accept writes and report health', () => {
+  // No roster, no read-back of study data. The form is one document per child,
+  // so nothing needs to fetch a list — and an endpoint that cannot read out
+  // cannot leak on a GET.
   const { sandbox } = loadEndpoint();
-  post(sandbox, envelope([{
-    uuid: 'e1', form: '01_enrolment', studyNumber: 'PPP-KN-0147-0',
-    clientTs: '2026-09-11T09:00:00Z',
-    data: { study_number: 'PPP-KN-0147-0', date_of_birth: '2022-07-11', age_days: 1523, age_months: 50 },
-  }]));
-
-  const res = get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN' });
-  assert.equal(res.ok, true);
-  assert.equal(res.roster.length, 1);
-
-  const child = res.roster[0];
-  assert.equal(child.study_number, 'PPP-KN-0147-0');
-  assert.equal(child.age_days, 1523);
-  assert.equal(child.date_of_birth, undefined);
-  assert.ok(!JSON.stringify(res).includes('2022-07-11'),
-    'a date of birth reached the roster response');
+  assert.equal(typeof sandbox.roster, 'undefined');
+  assert.equal(typeof sandbox.cachedRoster, 'undefined');
+  assert.equal(get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN' }).error, 'unknown_mode');
+  assert.equal(get(sandbox, { mode: 'anything', token: 'CAMP-2026-KN' }).error, 'unknown_mode');
 });
 
-test('the roster is refused without a token', () => {
+test('a GET cannot read back anything that was written', () => {
   const { sandbox } = loadEndpoint();
-  assert.equal(get(sandbox, { mode: 'roster' }).ok, false);
-  assert.equal(get(sandbox, { mode: 'roster', token: 'nope' }).ok, false);
-});
+  post(sandbox, envelope([obs('a', { rest_pain: 7 })]));
 
-test('the roster gathers the anchors the due-list needs', () => {
-  const { sandbox } = loadEndpoint();
-  post(sandbox, envelope([
-    { uuid: 'e1', form: '01_enrolment', studyNumber: 'PPP-KN-0147-0', clientTs: '2026-09-11T09:00:00Z',
-      data: { study_number: 'PPP-KN-0147-0', date_of_birth: '2022-07-11' } },
-    { uuid: 'p1', form: '02_preop', studyNumber: 'PPP-KN-0147-0', clientTs: '2026-09-11T09:10:00Z',
-      data: { study_number: 'PPP-KN-0147-0', weight_kg: 16, cognitive_impairment: false, procedure_category: 'Inguinal hernia repair' } },
-    { uuid: 'i1', form: '03_intraop', studyNumber: 'PPP-KN-0147-0', clientTs: '2026-09-11T11:00:00Z',
-      data: { study_number: 'PPP-KN-0147-0', anaesthesia_end: '2026-09-11T10:55:00Z', block_at: '2026-09-11T10:05:00Z' } },
-  ]));
+  // Health says only what a client needs to decide whether it is up to date.
+  const health = get(sandbox, { mode: 'health' });
+  assert.deepEqual(Object.keys(health).sort(), ['ok', 'schemaVersion', 'serverTs']);
 
-  const child = get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN' }).roster[0];
-  assert.equal(child.anaesthesia_end, '2026-09-11T10:55:00Z');
-  assert.equal(child.block_at, '2026-09-11T10:05:00Z');
-  assert.equal(child.weight_kg, 16);
-  assert.equal(child.procedure_category, 'Inguinal hernia repair');
+  // Nothing a GET returns carries a subject id or a clinical value.
+  for (const mode of ['health', 'roster', 'anything', undefined]) {
+    const body = JSON.stringify(get(sandbox, { mode, token: 'CAMP-2026-KN' }));
+    assert.ok(!body.includes('PPP-'), `${mode} leaked a subject id`);
+    assert.ok(!body.includes('rest_pain'), `${mode} leaked a clinical field`);
+  }
 });
 
 test('health reports the schema version a tablet must match', () => {

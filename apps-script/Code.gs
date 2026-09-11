@@ -78,7 +78,6 @@ function doPost(e) {
       }
     });
 
-    if (accepted.length) invalidateRoster();
     audit(ss, body, serverTs, accepted.length, duplicates.length, rejected.length, '');
 
     return json({
@@ -104,10 +103,6 @@ function doGet(e) {
       serverTs: new Date().toISOString(),
       schemaVersion: SCHEMA_VERSION,
     });
-  }
-  if (mode === 'roster') {
-    if (!tokenValid(e.parameter.token)) return json({ ok: false, error: 'unauthorised' });
-    return json({ ok: true, serverTs: new Date().toISOString(), roster: cachedRoster() });
   }
   // A POST diverted here by a cached redirect lands with no mode. Say so
   // explicitly rather than returning something a client could mistake for an
@@ -231,91 +226,6 @@ function isDuplicate(ss, form, uuid, idx) {
 }
 
 /* ---------------- roster ---------------- */
-
-/**
- * Building the roster reads several whole sheets, which is slow and gets
- * slower as the camp fills up. Every collector's phone asks for it on a timer,
- * so without a cache one camp of ten people would re-scan the workbook ten
- * times a minute. Sixty seconds of staleness is invisible against a schedule
- * whose tightest window is fifteen minutes.
- */
-function cachedRoster() {
-  var cache = CacheService.getScriptCache();
-  var hit = cache.get('roster');
-  if (hit) {
-    try { return JSON.parse(hit); } catch (ignored) {}
-  }
-  var fresh = roster();
-  try {
-    cache.put('roster', JSON.stringify(fresh), 60);
-  } catch (ignored) {
-    // Over the 100KB cache entry limit — a very large camp. Serve it uncached.
-  }
-  return fresh;
-}
-
-/** Called after a write, so a newly enrolled child is not hidden for a minute. */
-function invalidateRoster() {
-  try { CacheService.getScriptCache().remove('roster'); } catch (ignored) {}
-}
-
-function roster() {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
-  var enrol = ss.getSheetByName('01_enrolment');
-  var intra = ss.getSheetByName('03_intraop');
-  var pacu = ss.getSheetByName('04_pacu_t0');
-  var preop = ss.getSheetByName('02_preop');
-  if (!enrol || enrol.getLastRow() < 2) return [];
-
-  var byStudy = {};
-  rows(enrol).forEach(function (r) {
-    if (!r.study_number) return;
-    byStudy[r.study_number] = {
-      study_number: r.study_number,
-      // Age is derived here and the date of birth never leaves the workbook.
-      age_days: r['age_days'] || null,
-      age_months: r['age_months'] || null,
-      cognitive_impairment: false,
-    };
-  });
-  if (preop) rows(preop).forEach(function (r) {
-    var c = byStudy[r.study_number];
-    if (!c) return;
-    c.cognitive_impairment = r.cognitive_impairment === true || r.cognitive_impairment === 'true';
-    c.weight_kg = r.weight_kg || null;
-    c.procedure_category = r.procedure_category || null;
-    if (r.age_days) c.age_days = r.age_days;
-    if (r.age_months) c.age_months = r.age_months;
-  });
-  if (intra) rows(intra).forEach(function (r) {
-    var c = byStudy[r.study_number];
-    if (c && r.anaesthesia_end) c.anaesthesia_end = r.anaesthesia_end;
-    if (c && r['block_at']) c.block_at = r['block_at'];
-  });
-  if (pacu) rows(pacu).forEach(function (r) {
-    var c = byStudy[r.study_number];
-    if (c && r.pacu_arrival_at) c.pacu_arrival = r.pacu_arrival_at;
-  });
-
-  var out = [];
-  for (var k in byStudy) {
-    var child = byStudy[k];
-    NEVER_RETURN.forEach(function (f) { delete child[f]; });
-    out.push(child);
-  }
-  return out;
-}
-
-function rows(sheet) {
-  if (sheet.getLastRow() < 2) return [];
-  var values = sheet.getDataRange().getValues();
-  var headers = values[0];
-  return values.slice(1).map(function (row) {
-    var o = {};
-    headers.forEach(function (h, i) { o[h] = row[i]; });
-    return o;
-  });
-}
 
 /* ---------------- audit ---------------- */
 

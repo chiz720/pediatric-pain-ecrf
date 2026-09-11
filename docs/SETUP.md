@@ -28,9 +28,14 @@ and there is no reason to publish the address of an identifiable dataset.
 There is nothing to run first and no settings to fill in. Sheets create
 themselves on the first write.
 
-> **After any change to `Code.gs`:** Deploy → Manage deployments → pencil →
-> Version: **New version** → Deploy. Editing alone changes nothing that phones
-> can see. The URL stays the same.
+> **After any change to `Code.gs` — both steps, in order:**
+> 1. **Paste the new file over the old one** in the Apps Script editor and save.
+>    "Redeploy" publishes whatever code is currently in the editor, so if the
+>    file was never updated, redeploying simply republishes the old version.
+> 2. Deploy → Manage deployments → pencil → Version: **New version** → Deploy.
+>
+> The URL never changes. If writes start coming back `unauthorised`, it is
+> almost always step 1 that was missed.
 
 > **Apps Script is slow, and that is normal.** A write takes a few seconds.
 > Nothing blocks anyone — records save to the phone instantly and travel in the
