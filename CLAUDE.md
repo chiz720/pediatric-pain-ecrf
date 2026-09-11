@@ -62,9 +62,11 @@ lib/dueList.js        per-child schedule → the home screen's next action
 lib/outbox.js         batching, backoff, ACK reconciliation (pure, testable)
 lib/store.js          IndexedDB: outbox · roster · local records
 lib/sync.js           the network half: POST, roster pull, clock check
-lib/render.js         schema → DOM, plus the computed-field derivations
-app.js                routing, due-list screen, enrolment, assessment
-index.html styles.css sw.js manifest.webmanifest
+index.html + form.js  THE APP — one page, six questions, one button
+lib/render.js         schema → DOM (used by the full app only)
+full.html + app.js    the full eCRF: due list, enrolment, all ten modules.
+                      Kept working, but it is not the front door.
+config.js styles.css sw.js manifest.webmanifest
 apps-script/Code.gs   the endpoint — source of truth, pasted into the bound script
 tests/                node:test, zero dependencies
 ```
@@ -124,6 +126,17 @@ No dependencies and no install step. Node 20+.
 - `tests/appsScript.test.js` runs `Code.gs` in a VM sandbox with fake Google
   services. Editing the endpoint without running it there means shipping
   untested code to a place you cannot debug.
+
+## The simple form comes first
+
+`index.html` + `form.js` is what collectors open: study number, date of birth,
+timepoint, two pain scores, one yes/no. Six questions, one screen, one button.
+Everything clever — age-based scale routing, FLACC totalling, the offline
+queue — happens behind it and is never the nurse's problem.
+
+Do not add a field to that form without asking. Every addition is paid for
+thirteen times per child by someone who is busy. The full eCRF still exists at
+`full.html` for the modules that are genuinely needed elsewhere.
 
 ## Deployed
 

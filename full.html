@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b3b36">
+<title>PPP eCRF — full</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="app-bar">
+  <button class="back" id="back" hidden aria-label="Back">‹</button>
+  <div class="app-title">
+    <strong id="title">Due now</strong>
+    <span id="subtitle" class="sub"></span>
+  </div>
+  <button class="sync-badge" id="sync" title="Sync now">
+    <span class="dot" id="sync-dot"></span>
+    <span id="pending">0</span>
+  </button>
+</header>
+
+<main id="view" class="view"></main>
+
+<nav class="tab-bar" id="tabs">
+  <button data-route="#/due" class="tab on">Due</button>
+  <button data-route="#/enrol" class="tab">Enrol</button>
+  <button data-route="#/children" class="tab">Children</button>
+  <button data-route="#/me" class="tab">You</button>
+</nav>
+
+<div id="toast" class="toast" hidden></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>

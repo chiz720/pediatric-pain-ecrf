@@ -6,15 +6,17 @@
  * app_version. That is deliberate — never break a working device mid-camp.
  */
 
-const VERSION = '2026.09.11-p3';
+const VERSION = '2026.09.11-simple';
 const CACHE = `ppp-ecrf-${VERSION}`;
 
 const SHELL = [
   './',
   './index.html',
+  './form.js',
+  './config.js',
+  './full.html',
   './styles.css',
   './app.js',
-  './config.js',
   './manifest.webmanifest',
   './schema/crf.v1.json',
   './schema/params.json',
