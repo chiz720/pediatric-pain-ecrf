@@ -6,32 +6,25 @@
  * app_version. That is deliberate — never break a working device mid-camp.
  */
 
-const VERSION = '2026.09.11-simple';
+const VERSION = '2026.09.11-crf';
 const CACHE = `ppp-ecrf-${VERSION}`;
 
 const SHELL = [
   './',
   './index.html',
-  './form.js',
+  './crf.css',
+  './crf.js',
   './config.js',
-  './full.html',
-  './styles.css',
-  './app.js',
   './manifest.webmanifest',
-  './schema/crf.v1.json',
   './schema/params.json',
   './lib/params.js',
   './lib/age.js',
   './lib/routing.js',
   './lib/studyNumber.js',
   './lib/scoring.js',
-  './lib/derive.js',
-  './lib/validate.js',
-  './lib/dueList.js',
   './lib/outbox.js',
   './lib/store.js',
   './lib/sync.js',
-  './lib/render.js',
 ];
 
 self.addEventListener('install', (event) => {

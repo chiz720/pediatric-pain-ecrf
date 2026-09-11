@@ -61,3 +61,44 @@ test('eligibility and assent follow the protocol ages', () => {
 test('the enrolment echo names the age and the instrument it selects', () => {
   assert.equal(ageEchoLabel(born(2022, 7, 11), at), '4 y 2 m — FPS-R');
 });
+
+/* ------------------------------------------------------------------ *
+ * Age in months
+ *
+ * The clinical form records completed months, not a birth date. That is the
+ * primary path now: simpler at the bedside, and months are not a direct
+ * identifier, so the workbook stops being an identifiable dataset.
+ * ------------------------------------------------------------------ */
+
+test('months route to the same instruments as years, at the same boundaries', () => {
+  assert.equal(selectInstrument({ ageMonths: 0 }).tool, TOOLS.FLACC);
+  assert.equal(selectInstrument({ ageMonths: 47 }).tool, TOOLS.FLACC);
+  assert.equal(selectInstrument({ ageMonths: 48 }).tool, TOOLS.FPS_R);
+  assert.equal(selectInstrument({ ageMonths: 95 }).tool, TOOLS.FPS_R);
+  assert.equal(selectInstrument({ ageMonths: 96 }).tool, TOOLS.NRS);
+});
+
+test('a months figure and the equivalent birth date agree', () => {
+  const byMonths = selectInstrument({ ageMonths: 62 });
+  const byDate = selectInstrument({ dateOfBirth: '2021-07-11', assessedAt: '2026-09-11' });
+  assert.equal(byMonths.tool, byDate.tool);
+  assert.equal(byMonths.months, byDate.months);
+  assert.equal(byMonths.label, byDate.label);
+});
+
+test('months are explained the way a nurse would say them', () => {
+  assert.equal(selectInstrument({ ageMonths: 7 }).label, '7 m');
+  assert.equal(selectInstrument({ ageMonths: 62 }).label, '5 y 2 m');
+  assert.match(selectInstrument({ ageMonths: 62 }).reason, /point at a face/);
+  assert.match(selectInstrument({ ageMonths: 6 }).reason, /watch the child/);
+  assert.match(selectInstrument({ ageMonths: 120 }).reason, /number 0 to 10/);
+});
+
+test('cognitive impairment still overrides age given in months', () => {
+  assert.equal(selectInstrument({ ageMonths: 120, cognitiveImpairment: true }).tool, TOOLS.R_FLACC);
+});
+
+test('a nonsense age is an error, not a silent default to one of the scales', () => {
+  assert.throws(() => selectInstrument({ ageMonths: -3 }), /zero or more/);
+  assert.throws(() => selectInstrument({ ageMonths: NaN }), /zero or more/);
+});

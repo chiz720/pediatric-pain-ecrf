@@ -155,14 +155,27 @@ test('pain bands tile 0-10 exactly once', () => {
   assert.deepEqual(covered, [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]);
 });
 
-test('the schedule is ordered, uniquely identified, and matches the agreed thirteen timepoints', () => {
+test('the ward schedule is the five timepoints on the clinical form', () => {
   const tps = PARAMS.assessmentSchedule.timepoints;
-  assert.equal(tps.length, 13);
-  assert.equal(new Set(tps.map((t) => t.id)).size, 13);
+  assert.deepEqual(tps.map((t) => t.id), ['T2', 'T6', 'T12', 'T24', 'T48']);
+  assert.equal(new Set(tps.map((t) => t.id)).size, 5);
   for (let i = 1; i < tps.length; i += 1) {
     assert.ok(tps[i].offsetHours > tps[i - 1].offsetHours, `${tps[i].id} does not follow ${tps[i - 1].id}`);
   }
   assert.equal(tps.at(-1).offsetHours, 48);
+});
+
+test('PACU emergence is scored at arrival, 30 and 60 minutes', () => {
+  const tps = PARAMS.paedSchedule.timepoints;
+  assert.deepEqual(tps.map((t) => t.offsetMinutes), [0, 30, 60]);
+});
+
+test('the form option lists exist for every choice the paper form offers', () => {
+  const o = PARAMS.formOptions;
+  for (const key of ['sex', 'asa', 'surgicalDomain', 'approach', 'maintenance', 'block', 'guidance', 'consent']) {
+    assert.ok(Array.isArray(o[key]) && o[key].length >= 2, `formOptions.${key} is missing or too short`);
+  }
+  assert.ok(o.block.includes('None'), 'the block list must allow "None"');
 });
 
 test('windows are non-decreasing as the interval lengthens', () => {

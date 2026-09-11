@@ -4,247 +4,307 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b3b36">
-<title>Pain assessment</title>
+<title>Pediatric Perioperative Pain — CRF</title>
 <link rel="manifest" href="manifest.webmanifest">
-<style>
-/*
- * One screen, six questions, one button.
- *
- * Everything clever happens behind the form: the scale is chosen from the
- * child's age, the FLACC total is added up, the record is kept on the phone if
- * there is no signal. None of that is the nurse's problem.
- */
-
-:root {
-  --ground: #f4f6f5; --surface: #fff; --surface-2: #e9eeec;
-  --ink: #11201e; --ink-2: #41534f; --ink-3: #6e807c; --rule: #d2dbd8;
-  --accent: #0b6e63; --accent-ink: #07514a; --accent-soft: #dbedea;
-  --mild: #2f7d52; --moderate: #9b6b07; --severe: #ae3527;
-}
-@media (prefers-color-scheme: dark) {
-  :root {
-    --ground: #0b1513; --surface: #121e1c; --surface-2: #1a2725;
-    --ink: #e8efec; --ink-2: #b0c2be; --ink-3: #829692; --rule: #26352f;
-    --accent: #5cc2b0; --accent-ink: #8fd8c9; --accent-soft: #13322d;
-    --mild: #63b681; --moderate: #d8a83e; --severe: #e2735f;
-  }
-}
-
-* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-body {
-  margin: 0; background: var(--ground); color: var(--ink);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  font-size: 17px; line-height: 1.45;
-}
-
-header {
-  position: sticky; top: 0; z-index: 5;
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: max(10px, env(safe-area-inset-top)) 16px 10px;
-  background: var(--surface); border-bottom: 1px solid var(--rule);
-}
-header h1 { margin: 0; font-size: 1.05rem; }
-header .who { font-size: 0.78rem; color: var(--ink-3); }
-.badge {
-  font-family: ui-monospace, monospace; font-size: 0.75rem;
-  padding: 4px 10px; border-radius: 999px;
-  border: 1px solid var(--rule); background: var(--surface-2); color: var(--ink-2);
-}
-.badge.waiting { border-color: var(--moderate); color: var(--moderate); }
-
-main { padding: 14px 16px 140px; max-width: 640px; margin: 0 auto; }
-
-.q { margin-bottom: 26px; }
-.q > label, .q > .qlabel {
-  display: block; margin-bottom: 8px; font-size: 1rem; font-weight: 600;
-}
-.hint { margin: -4px 0 8px; font-size: 0.82rem; color: var(--ink-3); }
-
-input[type="text"], input[type="number"], select {
-  width: 100%; min-height: 52px; padding: 12px 14px; font: inherit;
-  border: 1px solid var(--rule); border-radius: 10px;
-  background: var(--surface); color: var(--ink);
-}
-input:focus-visible, select:focus-visible, button:focus-visible {
-  outline: 3px solid var(--accent); outline-offset: 2px;
-}
-input.mono { font-family: ui-monospace, monospace; letter-spacing: 0.04em; }
-input.ok { border-color: var(--mild); }
-input.bad { border-color: var(--severe); }
-
-.dob { display: grid; grid-template-columns: 1fr 1.4fr 1.3fr; gap: 8px; }
-
-.note { margin-top: 8px; font-size: 0.85rem; }
-.note.ok { color: var(--mild); }
-.note.bad { color: var(--severe); }
-.note.info {
-  padding: 10px 12px; border-radius: 10px;
-  background: var(--accent-soft); color: var(--accent-ink); font-weight: 600;
-}
-
-.choices { display: flex; flex-wrap: wrap; gap: 8px; }
-.choice {
-  flex: 1 1 auto; min-width: 84px; min-height: 54px; padding: 10px 14px;
-  font: inherit; cursor: pointer; border-radius: 10px;
-  border: 1px solid var(--rule); background: var(--surface); color: var(--ink-2);
-}
-.choice.on { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
-
-.scale { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-.scale.nrs { grid-template-columns: repeat(6, 1fr); }
-.pt {
-  min-height: 64px; font: inherit; font-size: 1.25rem; font-weight: 600;
-  font-family: ui-monospace, monospace; cursor: pointer;
-  border: 1px solid var(--rule); border-radius: 10px;
-  background: var(--surface); color: var(--ink-2);
-}
-.pt.on { color: #fff; border-color: transparent; }
-.pt.on.b-none, .pt.on.b-mild { background: var(--mild); }
-.pt.on.b-moderate { background: var(--moderate); }
-.pt.on.b-severe { background: var(--severe); }
-.anchors { display: flex; justify-content: space-between; margin-top: 6px; font-size: 0.78rem; color: var(--ink-3); }
-
-.faces { display: grid; grid-template-columns: repeat(6, 1fr); gap: 6px; }
-.face {
-  padding: 6px; cursor: pointer; border-radius: 12px;
-  border: 2px solid var(--rule); background: var(--surface);
-}
-.face.on { border-color: var(--accent); background: var(--accent-soft); }
-.face svg { width: 100%; height: auto; display: block; }
-.f-line { fill: none; stroke: var(--ink-2); stroke-width: 2.6; stroke-linecap: round; }
-.f-dot { fill: var(--ink-2); }
-
-.flacc-row { margin-bottom: 14px; }
-.flacc-row .qlabel { font-size: 0.92rem; margin-bottom: 6px; }
-.flacc-opts { display: flex; flex-direction: column; gap: 6px; }
-.flacc-opt {
-  display: flex; gap: 10px; align-items: center; text-align: left;
-  min-height: 50px; padding: 10px 12px; font: inherit; font-size: 0.9rem;
-  cursor: pointer; border: 1px solid var(--rule); border-radius: 10px;
-  background: var(--surface); color: var(--ink-2);
-}
-.flacc-opt.on { background: var(--accent-soft); border-color: var(--accent); color: var(--ink); }
-.flacc-opt b {
-  flex: none; width: 28px; height: 28px; border-radius: 50%;
-  display: grid; place-items: center; background: var(--surface-2);
-  font-family: ui-monospace, monospace; font-size: 0.82rem;
-}
-.flacc-opt.on b { background: var(--accent); color: #fff; }
-.total {
-  display: flex; justify-content: space-between; align-items: baseline;
-  margin-top: 10px; padding: 12px 14px; border-radius: 10px; background: var(--accent-soft);
-}
-.total span:first-child { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent-ink); }
-.total span:last-child { font-family: ui-monospace, monospace; font-size: 1.4rem; font-weight: 700; color: var(--accent-ink); }
-
-footer {
-  position: fixed; left: 0; right: 0; bottom: 0; z-index: 5;
-  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-  background: var(--surface); border-top: 1px solid var(--rule);
-}
-footer .inner { max-width: 640px; margin: 0 auto; }
-#submit {
-  width: 100%; min-height: 58px; font: inherit; font-size: 1.05rem; font-weight: 700;
-  cursor: pointer; border: none; border-radius: 12px;
-  background: var(--accent); color: #fff;
-}
-#submit:disabled { opacity: 0.4; cursor: not-allowed; }
-#why { margin: 0 0 8px; font-size: 0.85rem; color: var(--severe); text-align: center; }
-
-.done {
-  position: fixed; inset: 0; z-index: 20; display: grid; place-items: center;
-  padding: 24px; background: var(--ground); text-align: center;
-}
-.done h2 { margin: 0 0 6px; font-size: 1.5rem; }
-.done p { margin: 0 0 22px; color: var(--ink-2); }
-.done .tick {
-  width: 76px; height: 76px; margin: 0 auto 18px; border-radius: 50%;
-  display: grid; place-items: center; background: var(--mild); color: #fff; font-size: 2.4rem;
-}
-.done button {
-  min-height: 56px; padding: 0 28px; font: inherit; font-weight: 700; cursor: pointer;
-  border: none; border-radius: 12px; background: var(--accent); color: #fff;
-}
-.done .again { display: block; margin: 14px auto 0; background: none; color: var(--accent-ink); border: 1px solid var(--rule); }
-
-[hidden] { display: none !important; }
-@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
-</style>
+<link rel="stylesheet" href="crf.css">
 </head>
 <body>
 
 <header>
-  <div>
-    <h1>Pain assessment</h1>
-    <div class="who" id="who"></div>
+  <div class="hbar">
+    <div>
+      <h1>Pediatric Perioperative Pain</h1>
+      <p class="sub">Prospective 48-hour surgical camp registry · Protocol v1.0</p>
+    </div>
+    <div class="badge" id="badge">saved</div>
   </div>
-  <div class="badge" id="badge">saved</div>
+  <div class="whobar">
+    <span id="who"></span>
+    <button class="linkish" id="changeWho" type="button">change</button>
+  </div>
 </header>
 
-<main id="form">
+<main>
 
-  <div class="q">
-    <label for="study">1 &nbsp;Study number</label>
-    <p class="hint">On the child's wristband.</p>
-    <input id="study" class="mono" type="text" inputmode="text"
-           autocapitalize="characters" autocomplete="off" spellcheck="false"
-           placeholder="PPP-KN-0147-0">
-    <p class="note" id="studyNote"></p>
-  </div>
+  <!-- ══════════ Administrative & enrollment header ══════════ -->
+  <section class="card" id="adminCard">
+    <h2>Administrative &amp; enrollment</h2>
 
-  <div class="q">
-    <span class="qlabel">2 &nbsp;Date of birth</span>
-    <p class="hint">So the right pain scale is used.</p>
-    <div class="dob">
-      <input id="dd" type="number" inputmode="numeric" min="1" max="31" placeholder="Day">
-      <select id="mm">
-        <option value="">Month</option>
-      </select>
-      <input id="yy" type="number" inputmode="numeric" min="2005" max="2030" placeholder="Year">
+    <div class="field">
+      <label for="subjectId">Subject ID</label>
+      <input id="subjectId" class="mono" type="text" autocapitalize="characters"
+             autocomplete="off" spellcheck="false" placeholder="PPP-KN-0147-0">
+      <p class="note" id="subjectNote"></p>
     </div>
-    <p class="note info" id="ageNote" hidden></p>
-  </div>
 
-  <div class="q">
-    <span class="qlabel">3 &nbsp;When is this?</span>
-    <div class="choices" id="timepoints"></div>
-  </div>
+    <div class="field">
+      <span class="lbl">Ethical consent &amp; assent</span>
+      <div class="checks" id="consent"></div>
+    </div>
 
-  <div class="q" id="restBlock" hidden>
-    <span class="qlabel">4 &nbsp;Pain now, lying still</span>
-    <div id="restScale"></div>
-  </div>
+    <div class="grid2">
+      <div class="field">
+        <label for="evalDate">Date</label>
+        <input id="evalDate" type="date">
+      </div>
+      <div class="field">
+        <span class="lbl">Evaluator</span>
+        <p class="readout" id="evaluator">—</p>
+      </div>
+    </div>
+  </section>
 
-  <div class="q" id="moveBlock" hidden>
-    <span class="qlabel">5 &nbsp;Pain when moving</span>
-    <p class="hint">Coughing, deep breath, sitting up, or moving the operated part.</p>
-    <div id="moveScale"></div>
-  </div>
+  <!-- ══════════ Module 1 ══════════ -->
+  <section class="card mod" data-module="m1">
+    <h2><span class="modno">Module 1</span> Preoperative baseline</h2>
 
-  <div class="q" id="rescueBlock" hidden>
-    <span class="qlabel">6 &nbsp;Given any pain medicine since the last check?</span>
-    <div class="choices" id="rescue"></div>
-  </div>
+    <div class="grid2">
+      <div class="field">
+        <label for="ageMonths">Age <em>(months)</em></label>
+        <input id="ageMonths" type="number" inputmode="numeric" min="0" max="216" placeholder="e.g. 62">
+      </div>
+      <div class="field">
+        <span class="lbl">Sex</span>
+        <div class="opts" id="sex"></div>
+      </div>
+    </div>
+    <p class="note info" id="toolNote" hidden></p>
+
+    <div class="grid3">
+      <div class="field">
+        <label for="weight">Weight <em>(kg)</em></label>
+        <input id="weight" type="number" inputmode="decimal" step="0.1" min="0.5" max="120">
+      </div>
+      <div class="field">
+        <label for="height">Height <em>(cm)</em></label>
+        <input id="height" type="number" inputmode="decimal" step="0.5" min="30" max="200">
+      </div>
+      <div class="field">
+        <span class="lbl">BMI <em>(kg/m²)</em></span>
+        <p class="readout" id="bmi">—</p>
+      </div>
+    </div>
+
+    <div class="field">
+      <span class="lbl">Physical status (ASA)</span>
+      <div class="opts" id="asa"></div>
+    </div>
+
+    <div class="field">
+      <span class="lbl">Routine or persistent pain lasting &gt; 3 months</span>
+      <div class="opts yn" id="chronicPain"></div>
+    </div>
+
+    <div class="grid2">
+      <div class="field">
+        <label for="mypas">Child m-YPAS-SF <em>(/100)</em></label>
+        <input id="mypas" type="number" inputmode="numeric" min="23" max="100">
+      </div>
+      <div class="field">
+        <label for="caregiverVas">Caregiver anxiety VAS <em>(/100)</em></label>
+        <input id="caregiverVas" type="number" inputmode="numeric" min="0" max="100">
+      </div>
+    </div>
+
+    <button class="save" data-save="m1">Save Module 1</button>
+  </section>
+
+  <!-- ══════════ Module 2 ══════════ -->
+  <section class="card mod" data-module="m2">
+    <h2><span class="modno">Module 2</span> Intraoperative surgical &amp; anesthetic log</h2>
+
+    <div class="field">
+      <span class="lbl">Surgical domain</span>
+      <div class="opts" id="domain"></div>
+    </div>
+
+    <div class="grid3">
+      <div class="field">
+        <span class="lbl">Approach</span>
+        <div class="opts" id="approach"></div>
+      </div>
+      <div class="field">
+        <label for="duration">Duration <em>(min)</em></label>
+        <input id="duration" type="number" inputmode="numeric" min="1" max="900">
+      </div>
+      <div class="field">
+        <label for="incision">Incision <em>(cm)</em></label>
+        <input id="incision" type="number" inputmode="decimal" step="0.5" min="0" max="60">
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="field">
+        <span class="lbl">GA maintenance</span>
+        <div class="opts" id="maintenance"></div>
+      </div>
+      <div class="field">
+        <label for="fentanyl">Intraoperative fentanyl <em>(µg)</em></label>
+        <input id="fentanyl" type="number" inputmode="decimal" step="1" min="0" max="1000">
+      </div>
+    </div>
+
+    <h3>Regional analgesia</h3>
+    <div class="field">
+      <span class="lbl">Block</span>
+      <div class="opts" id="block"></div>
+    </div>
+
+    <div id="blockDetail" hidden>
+      <div class="grid2">
+        <div class="field">
+          <span class="lbl">Guidance</span>
+          <div class="opts" id="guidance"></div>
+        </div>
+        <div class="field">
+          <span class="lbl">Local anaesthetic</span>
+          <div class="opts" id="laDrug"></div>
+        </div>
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label for="laConc">Concentration <em>(%)</em></label>
+          <input id="laConc" type="number" inputmode="decimal" step="0.05" min="0.05" max="2">
+        </div>
+        <div class="field">
+          <label for="laVol">Volume <em>(mL)</em></label>
+          <input id="laVol" type="number" inputmode="decimal" step="0.1" min="0.1" max="60">
+        </div>
+      </div>
+      <p class="note" id="laNote"></p>
+    </div>
+
+    <h3>Multimodal non-opioids</h3>
+    <div class="grid2">
+      <div class="field">
+        <label for="paracetamol">IV paracetamol <em>(mg)</em></label>
+        <input id="paracetamol" type="number" inputmode="decimal" step="1" min="0" max="2000">
+      </div>
+      <div class="field">
+        <label for="ketorolac">IV ketorolac <em>(mg)</em></label>
+        <input id="ketorolac" type="number" inputmode="decimal" step="0.5" min="0" max="60">
+      </div>
+      <div class="field">
+        <label for="dexamethasone">IV dexamethasone <em>(mg)</em></label>
+        <input id="dexamethasone" type="number" inputmode="decimal" step="0.1" min="0" max="20">
+      </div>
+      <div class="field">
+        <label for="ketamine">IV ketamine <em>(mg)</em></label>
+        <input id="ketamine" type="number" inputmode="decimal" step="0.5" min="0" max="100">
+      </div>
+    </div>
+
+    <button class="save" data-save="m2">Save Module 2</button>
+  </section>
+
+  <!-- ══════════ Module 3 ══════════ -->
+  <section class="card mod" data-module="m3">
+    <h2><span class="modno">Module 3</span> PACU emergence delirium vs acute pain</h2>
+    <p class="explain">
+      Scored at arrival, 30 min and 60 min. A total of <strong>10 or more</strong>
+      with non-purposeful thrashing points to emergence delirium rather than pain —
+      calming and reassurance, not more opioid.
+    </p>
+    <div class="tabs" id="paedTabs"></div>
+    <div id="paedItems"></div>
+    <div class="total" id="paedTotal"><span>PAED total</span><span>— / 20</span></div>
+    <p class="note" id="paedVerdict"></p>
+    <button class="save" data-save="m3">Save this PAED timepoint</button>
+  </section>
+
+  <!-- ══════════ Module 4 ══════════ -->
+  <section class="card mod" data-module="m4">
+    <h2><span class="modno">Module 4</span> Ward pain assessment</h2>
+    <p class="explain" id="m4Routing">Enter the child's age in Module 1 and the right scale is chosen for you.</p>
+    <div class="tabs" id="wardTabs"></div>
+
+    <div class="field">
+      <span class="lbl">Rest pain</span>
+      <div id="restScale"></div>
+    </div>
+    <div class="field">
+      <span class="lbl">Dynamic pain <em>(on movement)</em></span>
+      <div id="moveScale"></div>
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <span class="lbl">Rebound spike?</span>
+        <div class="opts yn" id="rebound"></div>
+      </div>
+      <div class="field">
+        <span class="lbl">Rescue given?</span>
+        <div class="opts yn" id="rescue"></div>
+      </div>
+    </div>
+
+    <button class="save" data-save="m4">Save this timepoint</button>
+  </section>
+
+  <!-- ══════════ Module 5 ══════════ -->
+  <section class="card mod" data-module="m5">
+    <h2><span class="modno">Module 5</span> Regional offset &amp; recovery endpoints</h2>
+
+    <h3>Block offset &amp; rebound</h3>
+    <div class="grid2">
+      <div class="field">
+        <label for="sensationTime">Sensation return <em>(time)</em></label>
+        <input id="sensationTime" type="time">
+      </div>
+      <div class="field">
+        <span class="lbl">Rebound spike <em>(≤3 → ≥7 within 2 h)</em></span>
+        <div class="opts yn" id="reboundSpike"></div>
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <span class="lbl">Burning character reported</span>
+        <div class="opts yn" id="burning"></div>
+      </div>
+      <div class="field">
+        <span class="lbl">Immediate rescue needed</span>
+        <div class="opts yn" id="immediateRescue"></div>
+      </div>
+    </div>
+
+    <h3>Cumulative opioid burden</h3>
+    <div class="grid3">
+      <div class="field">
+        <label for="rescueDoses">Total rescue doses</label>
+        <input id="rescueDoses" type="number" inputmode="numeric" min="0" max="60">
+      </div>
+      <div class="field">
+        <label for="ome">Cumulative OME <em>(mg)</em></label>
+        <input id="ome" type="number" inputmode="decimal" step="0.1" min="0" max="500">
+      </div>
+      <div class="field">
+        <span class="lbl">Weight-adjusted OME <em>(mg/kg)</em></span>
+        <p class="readout" id="omePerKg">—</p>
+      </div>
+    </div>
+
+    <h3>Functional milestones</h3>
+    <div class="grid3">
+      <div class="field">
+        <label for="toLiquids">Time to liquids <em>(h)</em></label>
+        <input id="toLiquids" type="number" inputmode="decimal" step="0.5" min="0" max="72">
+      </div>
+      <div class="field">
+        <label for="toAmbulation">Time to ambulation <em>(h)</em></label>
+        <input id="toAmbulation" type="number" inputmode="decimal" step="0.5" min="0" max="72">
+      </div>
+      <div class="field">
+        <label for="satisfaction">Caregiver satisfaction <em>(/10)</em></label>
+        <input id="satisfaction" type="number" inputmode="numeric" min="0" max="10">
+      </div>
+    </div>
+
+    <button class="save" data-save="m5">Save Module 5</button>
+  </section>
 
 </main>
 
-<footer>
-  <div class="inner">
-    <p id="why" hidden></p>
-    <button id="submit" disabled>Save</button>
-  </div>
-</footer>
+<div class="toast" id="toast" hidden></div>
 
-<div class="done" id="done" hidden>
-  <div>
-    <div class="tick">✓</div>
-    <h2 id="doneTitle">Saved</h2>
-    <p id="doneSub"></p>
-    <button id="next">Next child</button>
-    <button class="again" id="sameChild">Another time for this child</button>
-  </div>
-</div>
-
-<script type="module" src="form.js"></script>
+<script type="module" src="crf.js"></script>
 </body>
 </html>

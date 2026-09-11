@@ -120,10 +120,6 @@ function sheet(studyNumber) {
       <td class="narrow">${tp.dynamic ? '' : '<span style="color:#bbb">—</span>'}</td>
       <td class="narrow"></td>
       <td class="narrow"></td>
-      <td class="narrow"></td>
-      <td class="narrow"></td>
-      <td class="narrow"></td>
-      <td class="narrow"></td>
       <td class="mid"></td>
     </tr>`).join('');
 
@@ -139,7 +135,7 @@ function sheet(studyNumber) {
 
     <div class="idbar">
       <div><b>Study number</b> <span>${studyNumber || ''}</span></div>
-      <div><b>Age</b> <span></span></div>
+      <div><b>Age (months)</b> <span></span></div>
       <div><b>Weight (kg)</b> <span></span></div>
       <div><b>Anaesthesia end</b> <span></span></div>
       <div><b>Recorded by</b> <span></span></div>
@@ -160,11 +156,7 @@ function sheet(studyNumber) {
           <th>Clock time<br>assessed</th>
           <th>Pain<br>rest</th>
           <th>Pain<br>moving</th>
-          <th>Sedation<br>UMSS 0–4</th>
-          <th>Resp<br>rate</th>
-          <th>SpO₂<br>%</th>
-          <th>Heart<br>rate</th>
-          <th>Block<br>still on?</th>
+          <th>Rebound<br>spike?</th>
           <th>Rescue<br>given?</th>
           <th>Initials</th>
         </tr>

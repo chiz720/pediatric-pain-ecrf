@@ -127,16 +127,32 @@ No dependencies and no install step. Node 20+.
   services. Editing the endpoint without running it there means shipping
   untested code to a place you cannot debug.
 
-## The simple form comes first
+## The form is the product
 
-`index.html` + `form.js` is what collectors open: study number, date of birth,
-timepoint, two pain scores, one yes/no. Six questions, one screen, one button.
-Everything clever — age-based scale routing, FLACC totalling, the offline
-queue — happens behind it and is never the nurse's problem.
+`index.html` + `crf.js` + `crf.css` is the whole app: the clinical research
+form, laid out as the paper form reads — an administrative header then five
+numbered modules, each with its own Save. Different people fill different
+modules at different hours, so no module waits on another.
 
-Do not add a field to that form without asking. Every addition is paid for
-thirteen times per child by someone who is busy. The full eCRF still exists at
-`full.html` for the modules that are genuinely needed elsewhere.
+| Module | Sheet tab | Filled by |
+|---|---|---|
+| Header + 1 Preoperative baseline | `01_baseline` | enrolling clinician |
+| 2 Intraoperative log | `02_intraop` | theatre |
+| 3 PACU emergence (PAED ×3) | `03_paed` | recovery |
+| 4 Ward pain (×5 timepoints) | `04_ward_pain` | ward, over 48 h |
+| 5 Regional offset & recovery | `05_recovery` | before discharge |
+
+**Age is recorded in completed MONTHS, not a date of birth.** This came from
+the clinical form and it is a genuine improvement: months are not a direct
+identifier, so the workbook is no longer an identifiable dataset and the
+containment rules that used to govern `01_enrolment` no longer bind. Do not
+reintroduce a birth date.
+
+Everything the paper form asks a human to work out, the app works out instead:
+BMI, the PAED total (with items 1–3 reverse-scored so nobody does it by hand),
+which pain scale applies from the age, the weight-adjusted OME, and whether a
+local anaesthetic dose is over the ceiling. Adding a field costs a busy person
+time five times per child — ask before adding one.
 
 ## Deployed
 
