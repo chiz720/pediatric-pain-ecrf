@@ -40,7 +40,9 @@ and there is no reason to publish the address of an identifiable dataset.
 
 ## 2. Each data collector
 
-Send them two things: **the app link** and **their own token** from the
+The app lives at **https://chiz720.github.io/pediatric-pain-ecrf/**
+
+Send them two things: **that link** and **their own token** from the
 `_raters` tab. Send the token separately from the link — a message containing
 both is a credential someone can forward.
 

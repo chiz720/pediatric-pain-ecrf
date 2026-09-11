@@ -121,6 +121,16 @@ No dependencies and no install step. Node 20+.
   services. Editing the endpoint without running it there means shipping
   untested code to a place you cannot debug.
 
+## Deployed
+
+- App: https://chiz720.github.io/pediatric-pain-ecrf/ (GitHub Pages, `main`, root)
+- Repo: https://github.com/chiz720/pediatric-pain-ecrf — **public**. No tokens,
+  no endpoint URL, no workbook address. `LOCAL.md` holds those and is ignored.
+- Endpoint and workbook: see `LOCAL.md`.
+
+A push to `main` republishes the app. Bump `VERSION` in `sw.js` with any change
+to cached files, or devices keep serving the old copy.
+
 ## Running it
 
 ```
