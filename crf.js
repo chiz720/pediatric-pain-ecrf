@@ -15,10 +15,10 @@ import { loadParams, params } from './lib/params.js';
 import { selectInstrument, monthsLabel, TOOLS } from './lib/routing.js';
 import { ageMonths, ageLabel, isFuture } from './lib/age.js';
 import { flaccTotal, paedTotal, mypasSfScore, bmi, localAnaestheticDose } from './lib/scoring.js';
-import { validate as checkSubjectId, format as formatSubjectId } from './lib/studyNumber.js';
+import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.22e-crf';
+const APP_VERSION = '2026.09.22f-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -120,23 +120,51 @@ function showWho() {
 /* ---------------- study serial ---------------- */
 
 /**
- * The serial is assembled, not typed.
+ * The serial is allocated, never invented.
  *
- * Three centres enrol at the same time, so the number has to come from
- * somewhere that cannot hand the same one to two people: each centre's paper
- * enrolment log. What the app does is remove the two parts of the number that
- * are easiest to get wrong — the centre prefix, which comes from the phone's
- * centre, and the mod-11 check character, which is computed. Four digits are
- * typed, and a transposition in those four is what the check character exists
- * to catch.
+ * Three centres enrol at once, so exactly one thing is allowed to hand out the
+ * next number: the endpoint, inside the script lock it already takes for
+ * writes. PPP-CH-0001 is genuinely the first child at Chuka. The enrolling
+ * clinician taps once and writes the number on the paper form; the ward types
+ * those four digits back hours later to open Modules 2-5, and the app checks
+ * them against the workbook rather than against a checksum.
+ *
+ * This is the one thing in the app that needs a signal, and it is the one
+ * thing that cannot honestly be done any other way.
  */
+const NEW_PATIENT_LABEL = 'New patient — get the next number';
+
+/** Numbers allocated in this session: expected to have no baseline row yet. */
+const freshlyAllocated = new Set();
+
+async function newPatient() {
+  if (!centre) { toast('Pick the centre first'); return; }
+  const btn = $('newPatient');
+  btn.disabled = true;
+  btn.textContent = 'Asking the workbook…';
+  try {
+    const studyNumber = await sync.allocateStudyNumber(centre.code);
+    const parsed = parseSubjectId(studyNumber);
+    freshlyAllocated.add(studyNumber);
+    $('subjectSeq').value = parsed ? parsed.sequence : '';
+    readSerial();
+    toast(`${studyNumber} — write it on the paper form now`);
+  } catch (err) {
+    toast(err?.message === 'endpoint_stale'
+      ? 'The endpoint is out of date — the new Code.gs has not been deployed yet'
+      : 'No signal — study numbers can only be given out online');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = NEW_PATIENT_LABEL;
+  }
+}
+
 function readSerial() {
   const input = $('subjectSeq');
   const digits = input.value;
   const note = $('subjectNote');
 
   $('serialPrefix').textContent = centre ? `PPP-${centre.code}-` : 'PPP-··-';
-  $('serialCheck').textContent = '-·';
   input.className = 'mono';
   F.subjectId = '';
 
@@ -148,17 +176,30 @@ function readSerial() {
   if (digits.length < 4) {
     note.className = 'note';
     note.textContent = digits
-      ? 'Four digits, as written in this centre’s enrolment log.'
-      : 'The number from this centre’s enrolment log.';
+      ? 'Four digits, as written on the paper form.'
+      : 'Tap “New patient” to enrol, or type the number from the paper form.';
     return;
   }
 
-  F.subjectId = formatSubjectId(centre.code, digits);
-  $('serialCheck').textContent = `-${F.subjectId.slice(-1)}`;
+  let studyNumber;
+  try {
+    studyNumber = formatSubjectId(centre.code, digits);
+  } catch {
+    note.className = 'note bad';
+    note.textContent = 'Numbering starts at 0001.';
+    return;
+  }
+
+  F.subjectId = studyNumber;
   input.className = 'mono ok';
   note.className = 'note ok';
-  note.textContent = `${F.subjectId} — check character worked out for you.`;
-  flagIfEnrolled(F.subjectId);
+
+  if (freshlyAllocated.has(studyNumber)) {
+    note.textContent = `${studyNumber} — new number. Write it on the paper form before the child leaves.`;
+    return;
+  }
+  note.textContent = studyNumber;
+  confirmAgainstWorkbook(studyNumber);
 }
 
 function enrolledHere() {
@@ -172,28 +213,35 @@ function rememberEnrolled(studyNumber) {
 }
 
 /**
- * A number that already has a baseline row is normal for Modules 2-5 and a
- * mistake for Module 1, so it is said plainly and blocks nothing. Checked on
- * this phone first, which works with no signal; the endpoint is asked only to
- * catch the case where another phone enrolled the child.
+ * What the check character used to do, done against reality instead.
+ *
+ * A number typed off a paper form is checked for a baseline row. Missing means
+ * a mistyped number far more often than an unenrolled child, and saying so
+ * costs a second. "Unknown" — no signal, a dropped request — says nothing at
+ * all: telling a nurse there is no such patient on the strength of a lost
+ * request would be worse than silence. Neither answer blocks a save.
  */
 let serialProbe = 0;
-function flagIfEnrolled(studyNumber) {
-  if (enrolledHere().has(studyNumber)) { sayEnrolled(studyNumber, 'on this phone'); return; }
+function confirmAgainstWorkbook(studyNumber) {
+  if (enrolledHere().has(studyNumber)) { saySeen(studyNumber, 'yes'); return; }
   const probe = ++serialProbe;
-  sync.isEnrolled(studyNumber)
-    .then((yes) => {
-      if (yes && probe === serialProbe && F.subjectId === studyNumber) {
-        sayEnrolled(studyNumber, 'in the workbook');
-      }
+  sync.enrolmentStatus(studyNumber)
+    .then((status) => {
+      if (probe !== serialProbe || F.subjectId !== studyNumber) return;
+      if (status !== 'unknown') saySeen(studyNumber, status);
     })
     .catch(() => {});
 }
 
-function sayEnrolled(studyNumber, where) {
+function saySeen(studyNumber, status) {
   const note = $('subjectNote');
-  note.className = 'note warn';
-  note.textContent = `${studyNumber} already has a baseline row ${where}. Right for Modules 2–5 — but do not enrol the same child twice.`;
+  if (status === 'yes') {
+    note.className = 'note ok';
+    note.textContent = `${studyNumber} — enrolled, baseline on file.`;
+  } else {
+    note.className = 'note warn';
+    note.textContent = `${studyNumber} has no baseline row. Check the number on the form — or tap “New patient” if this child is not enrolled yet.`;
+  }
 }
 
 /* ---------------- shared builders ---------------- */
@@ -236,10 +284,11 @@ function buildAdmin() {
     if (digits !== seq.value) seq.value = digits;
     readSerial();
   });
-  // 31 typed in a hurry is the same child as 0031 in the log.
+  // 31 typed in a hurry is the same child as 0031 on the form.
   seq.addEventListener('blur', () => {
     if (seq.value && seq.value.length < 4) { seq.value = seq.value.padStart(4, '0'); readSerial(); }
   });
+  $('newPatient').addEventListener('click', newPatient);
   readSerial();
 
   const box = $('consent');
@@ -776,12 +825,17 @@ const SHEETS = {
 async function saveModule(mod) {
   const id = checkSubjectId(F.subjectId);
   if (!id.valid) {
-    toast(centre ? 'Type the four-digit serial number first' : 'Pick the centre first');
+    toast(centre ? 'Tap “New patient”, or type the number from the paper form' : 'Pick the centre first');
     $(centre ? 'subjectSeq' : 'centre').focus();
     scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
 
+  if (mod === 'm1' && !F.m1.hospital_number) {
+    toast('Enter the hospital inpatient number first');
+    $('hospitalNo').focus();
+    return;
+  }
   if (!who) {
     toast('Enter the evaluator name first');
     $('evaluator').focus();
@@ -831,7 +885,7 @@ async function saveModule(mod) {
   }
   // Remembered locally so the "already enrolled" warning survives a camp with
   // no signal, where the endpoint cannot be asked.
-  if (mod === 'm1') { rememberEnrolled(F.subjectId); sayEnrolled(F.subjectId, 'on this phone'); }
+  if (mod === 'm1') { rememberEnrolled(F.subjectId); saySeen(F.subjectId, 'yes'); }
 
   toast(navigator.onLine ? 'Saved' : 'Saved on this phone — will send when there is signal');
 }

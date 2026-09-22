@@ -50,6 +50,13 @@
       }
 
       var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+      // Allocation happens inside the same lock the writes take. That is what
+      // makes "the next number" mean anything with three centres enrolling at
+      // the same time — two phones asking in the same second are serialised
+      // here, and each leaves with its own number.
+      if (body.mode === 'allocate') return json(allocate(ss, body));
+
       var serverTs = new Date().toISOString();
       var accepted = [], duplicates = [], rejected = [];
       var seen = seenIndex();
@@ -232,6 +239,75 @@
       if (values[i][0] === uuid) return true;
     }
     return false;
+  }
+
+  /* ---------------- study number allocation ---------------- */
+
+  /**
+  * Hand out the next study number for a centre: PPP-CH-0001, PPP-CH-0002.
+  *
+  * The counter lives in Script Properties, one per centre, and is reconciled
+  * against the sheet before every allocation — so a cleared property, a
+  * restored workbook or a first run can never reissue a number that
+  * 01_baseline already holds. There is still no setup step: the first call
+  * creates what it needs.
+  */
+  function allocate(ss, body) {
+    var centre = String(body.centre || '').toUpperCase();
+    if (!/^[A-Z]{2}$/.test(centre)) return { ok: false, error: 'bad_centre' };
+
+    var props = PropertiesService.getScriptProperties();
+
+    // Idempotency, and the reason requestId exists. Apps Script sometimes
+    // answers a POST with a redirect the browser follows as a GET, so the
+    // client retries — and a retry must return the number already issued
+    // rather than burning a second one.
+    var memoKey = body.requestId ? 'alloc:' + body.requestId : null;
+    if (memoKey) {
+      var already = props.getProperty(memoKey);
+      if (already) {
+        return { ok: true, studyNumber: already, centre: centre, reissued: true };
+      }
+    }
+
+    var seqKey = 'seq:' + centre;
+    var current = Number(props.getProperty(seqKey) || 0);
+    var onSheet = highestSequence(ss, centre);
+    if (onSheet > current) current = onSheet;
+
+    var next = current + 1;
+    if (next > 9999) return { ok: false, error: 'sequence_exhausted' };
+
+    var studyNumber = 'PPP-' + centre + '-' + pad4(next);
+    props.setProperty(seqKey, String(next));
+    if (memoKey) props.setProperty(memoKey, studyNumber);
+
+    return { ok: true, studyNumber: studyNumber, sequence: next, centre: centre };
+  }
+
+  /** The highest sequence 01_baseline already holds for a centre, or 0. */
+  function highestSequence(ss, centre) {
+    var sheet = ss.getSheetByName('01_baseline');
+    if (!sheet || sheet.getLastRow() < 2) return 0;
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var col = headers.indexOf('study_number') + 1;
+    if (col === 0) return 0;
+    var prefix = 'PPP-' + centre + '-';
+    var values = sheet.getRange(2, col, sheet.getLastRow() - 1, 1).getValues();
+    var top = 0;
+    for (var i = 0; i < values.length; i++) {
+      var v = String(values[i][0]).toUpperCase();
+      if (v.indexOf(prefix) !== 0) continue;
+      var n = Number(v.slice(prefix.length));
+      if (n > top) top = n;
+    }
+    return top;
+  }
+
+  function pad4(n) {
+    var s = String(n);
+    while (s.length < 4) s = '0' + s;
+    return s;
   }
 
   /* ---------------- enrolment check ---------------- */

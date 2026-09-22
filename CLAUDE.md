@@ -54,7 +54,7 @@ schema/crf.v1.json    the data dictionary: 10 modules, all items, branching
 lib/params.js         loadParams() / params() — call loadParams at startup
 lib/age.js            calendar age arithmetic (days, months, years, label)
 lib/routing.js        age + impairment → instrument
-lib/studyNumber.js    PPP-<site>-<seq>-<check>, mod-11 check character
+lib/studyNumber.js    PPP-<centre>-<sequence>, format and parse only
 lib/scoring.js        FLACC · PAED · FPS-R · m-YPAS-SF · LA dose · MME · PACU adjudication
 lib/derive.js         cross-record endpoints: MME/kg, AUC, rebound, breakthrough, completeness
 lib/validate.js       BLOCK vs WARN tiers, branching, cross-field rules
@@ -74,8 +74,7 @@ tests/                node:test, zero dependencies
 **Out of scope by decision, do not reintroduce:** barcode/DataMatrix scanning
 and push notifications. The team is deliberately non-technical and collectors
 use their own phones, so anything needing hardware, OS permissions or an
-on-site debugger will fail in the field. Study numbers are typed, which is why
-the mod-11 check character in `lib/studyNumber.js` is load-bearing.
+on-site debugger will fail in the field.
 
 Not built yet: module polish (M6–M10 render from schema but are untested in
 anger), the `_derived` / `_qc` builders, the nightly analysis extract.
@@ -154,17 +153,28 @@ modules at different hours, so no module waits on another.
 | 5 Regional offset & recovery | `05_recovery` | before discharge |
 
 **Three centres enrol at once: Chuka, Meru and Guardian.** The two-letter code
-is the middle of every study number — `PPP-CH-0031-1` — and a collector taps
-their centre once on their phone. The serial itself comes from that centre's
-**paper enrolment log**, not from the app: the study is paper-first, so the
-number has to be in ink on the form before any phone sees the child, and a
-physical log is the one allocator three simultaneous centres cannot make
-collide. The app supplies the prefix and computes the mod-11 check character,
-so only four digits are typed. It warns — never blocks — when a serial already
-has a baseline row, checking this phone first and the endpoint second
-(`mode=check`, which answers one boolean and reads nothing out).
+is the middle of every study number — `PPP-CH-0001` — and a collector taps
+their centre once on their phone. **The endpoint allocates the number**, inside
+the script lock it already takes for writes, counting each centre separately
+from 0001; the counter lives in Script Properties and is reconciled against
+`01_baseline` before every allocation, so a cleared property or a restored
+workbook can never reissue a number a child already wears. Allocation carries a
+`requestId` and is memoised, because the POST-diverted-to-GET retry would
+otherwise hand the same child two numbers and lose the first.
 
-**The hospital number is a direct identifier and lives in Module 1 only.** It is
+This is **the one thing in the app that needs a signal** — deliberately, since
+a number unique across three centres has to come from one place. The enrolling
+clinician taps *New patient*, writes the number on the paper form, and the ward
+types those four digits back hours later to open Modules 2–5.
+
+**There is no check character any more.** A typed number is checked against the
+workbook instead (`mode=check`, one boolean, reads nothing out): no baseline
+row means a mistyped number far more often than an unenrolled child. The
+lookup is tri-state — `yes` / `no` / `unknown` — and `unknown` says nothing at
+all, because telling a nurse there is no such patient on the strength of a
+dropped request is worse than silence. Neither answer ever blocks a save.
+
+**The hospital inpatient number is a direct identifier and lives in Module 1 only.** It is
 what lets a query be traced back to a patient record, which is exactly why it
 never travels into Modules 2–5 or the analysis extract. It is declared in
 `privacy.identifierFields`, so `tests/schema.test.js` fails the build if a

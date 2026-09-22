@@ -57,28 +57,33 @@ test('date of birth: future dates and decade slips are blocked', () => {
   assert.deepEqual(codes(validateDateOfBirth({ year: 2026, month: 2, day: 30 }, NOW)), ['unparseable']);
 });
 
-test('study number: a transposed sequence fails the check character', () => {
-  assert.deepEqual(codes(validateStudyNumberField('PPP-KN-0147-0')), []);
-  assert.deepEqual(codes(validateStudyNumberField('PPP-KN-0174-0')), ['check_character']);
-  assert.deepEqual(codes(validateStudyNumberField('KN-0147-0')), ['format']);
+test('study number: centre, four digits, nothing else', () => {
+  assert.deepEqual(codes(validateStudyNumberField('PPP-CH-0147')), []);
+  assert.deepEqual(codes(validateStudyNumberField('CH-0147')), ['format']);
+  assert.deepEqual(codes(validateStudyNumberField('PPP-CH-147')), ['format']);
+  // The old check-character form is not silently accepted.
+  assert.deepEqual(codes(validateStudyNumberField('PPP-CH-0147-4')), ['format']);
   assert.deepEqual(codes(validateStudyNumberField('')), ['format']);
+  // Numbering starts at the first child, not at zero.
+  assert.deepEqual(codes(validateStudyNumberField('PPP-CH-0000')), ['format']);
 });
 
-test('the three centres each get their own serial space, and a transposition still fails', () => {
-  // CH, ME and GU enrol at the same time from separate paper logs. The same
-  // four digits at two centres are two different children, and each number
-  // carries its own check character — so a Meru number typed on a Chuka phone
-  // does not quietly validate.
-  const numbers = ['CH', 'ME', 'GU'].map((code) => formatStudyNumber(code, 31));
-  assert.deepEqual(numbers, ['PPP-CH-0031-1', 'PPP-ME-0031-5', 'PPP-GU-0031-X']);
-  assert.equal(new Set(numbers).size, 3);
+test('the three centres each get their own serial space, counted from one', () => {
+  // CH, ME and GU enrol at the same time. The same four digits at two centres
+  // are two different children, and the endpoint counts each centre alone —
+  // so PPP-CH-0001 and PPP-ME-0001 are both a first patient.
+  const firsts = ['CH', 'ME', 'GU'].map((code) => formatStudyNumber(code, 1));
+  assert.deepEqual(firsts, ['PPP-CH-0001', 'PPP-ME-0001', 'PPP-GU-0001']);
+  assert.equal(new Set(firsts).size, 3);
+  for (const n of firsts) assert.deepEqual(codes(validateStudyNumberField(n)), []);
 
-  for (const n of numbers) assert.deepEqual(codes(validateStudyNumberField(n)), []);
+  assert.equal(formatStudyNumber('CH', 31), 'PPP-CH-0031');
+  assert.equal(formatStudyNumber('GU', 9999), 'PPP-GU-9999');
 
-  // The centre's letters are inside the checksum, so swapping them breaks it.
-  assert.deepEqual(codes(validateStudyNumberField('PPP-ME-0031-1')), ['check_character']);
-  // And a transposition inside the four typed digits is what it is there for.
-  assert.deepEqual(codes(validateStudyNumberField('PPP-CH-0013-1')), ['check_character']);
+  // Nothing outside the counter's range can be formatted at all.
+  assert.throws(() => formatStudyNumber('CH', 0), /Bad sequence/);
+  assert.throws(() => formatStudyNumber('CH', 10000), /Bad sequence/);
+  assert.throws(() => formatStudyNumber('Chuka', 1), /Bad centre/);
 });
 
 test('theatre timestamps must run forwards and cannot be in the future', () => {

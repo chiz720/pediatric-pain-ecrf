@@ -1,5 +1,5 @@
 {
-  "paramsVersion": "1.1.0",
+  "paramsVersion": "1.2.0",
   "lastReviewed": "2026-09-22",
   "countersignedBy": null,
   "countersignedOn": null,
@@ -310,9 +310,11 @@
     ]
   },
   "studyNumber": {
-    "pattern": "^PPP-[A-Z]{2}-\\d{4}-[0-9X]$",
-    "checkCharacter": "mod11",
-    "example": "PPP-KN-0147-0"
+    "_note": "Allocated by the endpoint under a script lock, one counter per centre. No check character: the number is generated rather than typed, and a typed one is checked against the workbook instead.",
+    "pattern": "^PPP-[A-Z]{2}-\\d{4}$",
+    "allocation": "endpoint",
+    "sequenceStartsAt": 1,
+    "example": "PPP-CH-0001"
   },
   "paedSchedule": {
     "_note": "PACU emergence assessment. PAED >= 10 with non-purposeful thrashing indicates emergence delirium rather than pain.",

@@ -40,9 +40,9 @@
       <div class="serial">
         <span class="serial-fix" id="serialPrefix">PPP-··-</span>
         <input id="subjectSeq" class="mono" type="text" inputmode="numeric"
-               autocomplete="off" spellcheck="false" maxlength="4" placeholder="0031">
-        <span class="serial-fix" id="serialCheck">-·</span>
+               autocomplete="off" spellcheck="false" maxlength="4" placeholder="0001">
       </div>
+      <button class="secondary" id="newPatient" type="button">New patient — get the next number</button>
       <p class="note" id="subjectNote"></p>
     </div>
 
@@ -70,7 +70,7 @@
     <h2><span class="modno">Module 1</span> Preoperative baseline</h2>
 
     <div class="field">
-      <label for="hospitalNo">Hospital number</label>
+      <label for="hospitalNo">Hospital inpatient number</label>
       <input id="hospitalNo" type="text" autocomplete="off" spellcheck="false"
              placeholder="as written on the chart">
       <p class="note">Recorded here and nowhere else — it is what lets a query be traced back to
