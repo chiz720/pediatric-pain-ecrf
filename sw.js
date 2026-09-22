@@ -6,7 +6,7 @@
  * app_version. That is deliberate — never break a working device mid-camp.
  */
 
-const VERSION = '2026.09.22g-crf';
+const VERSION = '2026.09.22h-crf';
 const CACHE = `ppp-ecrf-${VERSION}`;
 
 const SHELL = [
@@ -19,6 +19,7 @@ const SHELL = [
   './schema/params.json',
   './lib/params.js',
   './lib/age.js',
+  './lib/clock.js',
   './lib/routing.js',
   './lib/studyNumber.js',
   './lib/scoring.js',

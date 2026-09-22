@@ -15,10 +15,11 @@ import { loadParams, params } from './lib/params.js';
 import { selectInstrument, monthsLabel, TOOLS } from './lib/routing.js';
 import { ageMonths, ageLabel, isFuture } from './lib/age.js';
 import { flaccTotal, paedTotal, mypasSfScore, bmi, localAnaestheticDose } from './lib/scoring.js';
+import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/clock.js';
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.22g-crf';
+const APP_VERSION = '2026.09.22h-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -538,8 +539,12 @@ function buildModule2() {
     updateLaDose();
   });
 
-  ['duration', 'incision', 'fentanyl', 'paracetamol', 'ketorolac', 'dexamethasone', 'ketamine']
+  ['incision', 'fentanyl', 'paracetamol', 'ketorolac', 'dexamethasone', 'ketamine']
     .forEach((id) => $(id).addEventListener('input', () => { F.m2[snake(id)] = num(id); }));
+
+  ['anaesStart', 'anaesEnd', 'surgStart', 'surgEnd']
+    .forEach((id) => $(id).addEventListener('input', updateTimes));
+  updateTimes();
 
   ['laConc', 'laVol'].forEach((id) =>
     $(id).addEventListener('input', () => { F.m2[snake(id)] = num(id); updateLaDose(); }));
@@ -569,6 +574,52 @@ function updateLaDose() {
     note.className = `note ${d.verdict === 'block' ? 'bad' : d.verdict === 'warn' ? 'warn' : 'ok'}`;
   } catch {
     note.textContent = ''; note.className = 'note';
+  }
+}
+
+/**
+ * Theatre times in, durations out.
+ *
+ * Nobody subtracts 08:40 from 09:55 between cases, and a duration typed by
+ * hand is one nobody can check afterwards — the times it came from are gone.
+ * Both are recorded: the four clock times as written on the anaesthetic chart,
+ * and the two durations derived from them, so the arithmetic stays auditable
+ * and a mistyped time is findable later.
+ */
+function updateTimes() {
+  const times = {
+    anaesStart: $('anaesStart').value,
+    anaesEnd: $('anaesEnd').value,
+    surgStart: $('surgStart').value,
+    surgEnd: $('surgEnd').value,
+  };
+  Object.assign(F.m2, {
+    anaes_start: times.anaesStart || null,
+    anaes_end: times.anaesEnd || null,
+    surg_start: times.surgStart || null,
+    surg_end: times.surgEnd || null,
+  });
+
+  const anaes = minutesBetween(times.anaesStart, times.anaesEnd);
+  const surg = minutesBetween(times.surgStart, times.surgEnd);
+  F.m2.anaes_duration_min = anaes;
+  F.m2.surg_duration_min = surg;
+
+  $('anaesTotal').lastChild.textContent = durationLabel(anaes);
+  $('surgTotal').lastChild.textContent = durationLabel(surg);
+
+  // Knife after induction, closure before the child is woken. Where that does
+  // not hold a time was mistyped — say so, and record it anyway.
+  const note = $('timesNote');
+  if (surgeryWithinAnaesthesia(times) === false) {
+    note.className = 'note warn';
+    note.textContent = 'The operation falls outside the anaesthetic. Check the four times.';
+  } else if (anaes != null && surg != null) {
+    note.className = 'note ok';
+    note.textContent = `${durationLabel(anaes - surg)} of anaesthesia outside the operation.`;
+  } else {
+    note.className = 'note';
+    note.textContent = 'Times as written on the anaesthetic chart. The durations work themselves out.';
   }
 }
 

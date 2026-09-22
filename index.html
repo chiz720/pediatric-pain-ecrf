@@ -160,20 +160,41 @@
       <p class="note">As written on the operation note. The operation only — no names.</p>
     </div>
 
-    <div class="grid3">
+    <div class="grid2">
       <div class="field">
         <span class="lbl">Approach</span>
         <div class="opts" id="approach"></div>
-      </div>
-      <div class="field">
-        <label for="duration">Duration <em>(min)</em></label>
-        <input id="duration" type="number" inputmode="numeric" min="1" max="900">
       </div>
       <div class="field">
         <label for="incision">Incision <em>(cm)</em></label>
         <input id="incision" type="number" inputmode="decimal" step="0.5" min="0" max="60">
       </div>
     </div>
+
+    <h3>Times</h3>
+    <div class="grid2">
+      <div class="field">
+        <label for="anaesStart">Anaesthesia start</label>
+        <input id="anaesStart" type="time">
+      </div>
+      <div class="field">
+        <label for="anaesEnd">Anaesthesia end</label>
+        <input id="anaesEnd" type="time">
+      </div>
+    </div>
+    <div class="grid2">
+      <div class="field">
+        <label for="surgStart">Surgery start <em>(knife)</em></label>
+        <input id="surgStart" type="time">
+      </div>
+      <div class="field">
+        <label for="surgEnd">Surgery end <em>(closure)</em></label>
+        <input id="surgEnd" type="time">
+      </div>
+    </div>
+    <div class="total" id="anaesTotal"><span>Anaesthesia</span><span>—</span></div>
+    <div class="total" id="surgTotal"><span>Surgery</span><span>—</span></div>
+    <p class="note" id="timesNote"></p>
 
     <div class="grid2">
       <div class="field">

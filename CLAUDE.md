@@ -53,6 +53,7 @@ schema/params.json    protocol parameters + their published sources
 schema/crf.v1.json    the data dictionary: 10 modules, all items, branching
 lib/params.js         loadParams() / params() — call loadParams at startup
 lib/age.js            calendar age arithmetic (days, months, years, label)
+lib/clock.js          wall-clock durations for the theatre log, midnight-safe
 lib/routing.js        age + impairment → instrument
 lib/studyNumber.js    PPP-<centre>-<sequence>, format and parse only
 lib/scoring.js        FLACC · PAED · FPS-R · m-YPAS-SF · LA dose · MME · PACU adjudication
