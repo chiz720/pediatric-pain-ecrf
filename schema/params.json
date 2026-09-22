@@ -1,5 +1,5 @@
 {
-  "paramsVersion": "1.8.0",
+  "paramsVersion": "1.9.0",
   "lastReviewed": "2026-09-22",
   "countersignedBy": null,
   "countersignedOn": null,
@@ -101,6 +101,15 @@
       "Midazolam": "mg/kg",
       "Dexmedetomidine": "mcg/kg/hr"
     }
+  },
+
+  "pacuDelirium": {
+    "_note": "What is given for emergence delirium once calming and reassurance have not settled it. Opioid escalation is the wrong answer here, which is why this list holds none. Doses are in the unit each agent is written in and are expressed per kilogram.",
+    "agents": [
+      { "name": "Dexmedetomidine", "unit": "mcg" },
+      { "name": "Clonidine", "unit": "mcg" },
+      { "name": "Ketamine", "unit": "mg" }
+    ]
   },
 
   "nonOpioids": {

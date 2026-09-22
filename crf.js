@@ -14,12 +14,12 @@ import { CONFIG } from './config.js';
 import { loadParams, params } from './lib/params.js';
 import { selectInstrument, monthsLabel, TOOLS } from './lib/routing.js';
 import { ageMonths, ageLabel, isFuture } from './lib/age.js';
-import { flaccTotal, paedTotal, mypasSfScore, bmi, localAnaestheticDose, doseMme, resolveMmeKey } from './lib/scoring.js';
+import { flaccTotal, paedTotal, mypasSfScore, bmi, localAnaestheticDose, doseMme, resolveMmeKey, pacuPathway } from './lib/scoring.js';
 import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/clock.js';
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.22z-crf';
+const APP_VERSION = '2026.09.23a-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -337,6 +337,7 @@ function buildModule1() {
     updateSedativeDose();  // and the sedation dose
     drawAdjuvants();       // and every block adjuvant
     drawNonOpioids();      // and the non-opioids
+    drawPacuPathways();    // and anything given in recovery
   };
   $('weight').addEventListener('input', recalcBmi);
   $('height').addEventListener('input', recalcBmi);
@@ -596,6 +597,7 @@ function applyRouting() {
   note.textContent = `${monthsLabel(months)} — ${toolName(routed.tool)}`;
   $('m4Routing').textContent = `${monthsLabel(months)} — using ${toolName(routed.tool)}.`;
   drawWardScales();
+  drawPacuPathways();     // recovery scores on the same instrument as the ward
 }
 
 const toolName = (tool) => ({
@@ -1228,10 +1230,229 @@ function buildModule3() {
     }));
   });
   drawPaedItems();
+  buildPacuPathways();
+}
+
+/* ---------------- PACU: what the PAED points at ---------------- */
+
+/**
+ * A PAED score is a question, not an answer, and the two answers need
+ * different things done.
+ *
+ * Pain: score it on the instrument the child's age selected — the same one the
+ * ward uses — and record what was given for it, converted to morphine
+ * equivalents exactly as intraoperative opioids are, so a child's opioid load
+ * can be added up across theatre, recovery and the ward.
+ *
+ * Delirium: the wrong answer is more opioid, so that list holds none. Calming
+ * first; if something was given, it was dexmedetomidine, clonidine or ketamine,
+ * and it is recorded per kilogram.
+ *
+ * Everything here is per timepoint. P0, P30 and P60 are three separate
+ * assessments of the same child and a rescue dose belongs to exactly one.
+ */
+const pacuLog = {};
+const pacuStore = (tp) => (pacuLog[tp] ||= { rescue: [], delirium: [] });
+
+function buildPacuPathways() {
+  const opioids = params().opioids.intraoperative.agents;
+  const nonOpioids = params().nonOpioids;
+  const edAgents = params().pacuDelirium.agents;
+  let opioid = null;
+  let nonOpioid = null;
+  let route = null;
+  let edAgent = null;
+
+  optionRow('rescueOpioid', opioids.map((a) => ({ label: a.name, value: a.name })), (name) => {
+    opioid = opioids.find((a) => a.name === name) || null;
+    $('rescueOpioidUnit').textContent = opioid ? `(${opioid.unit})` : '';
+    $('rescueOpioidDose').value = '';
+    $('rescueOpioidDoseField').hidden = !opioid;
+  });
+  $('addRescueOpioid').addEventListener('click', () => {
+    const amount = num('rescueOpioidDose');
+    if (!opioid) { toast('Pick the opioid first'); return; }
+    if (amount == null || !(amount > 0)) { toast('Type the dose that was given'); return; }
+    pacuStore(F.paedTab).rescue.push({ drug: opioid.name, route: 'IV', amount, unit: opioid.unit, opioid: true });
+    $('rescueOpioidDose').value = '';
+    drawRescue();
+  });
+
+  optionRow('rescueNonOpioid', nonOpioids.agents.map((a) => ({ label: a.name, value: a.name })), (name) => {
+    nonOpioid = name;
+    route = null;
+    $('rescueRouteField').hidden = false;
+    $('rescueNonOpioidDoseField').hidden = true;
+    optionRow('rescueRoute', nonOpioids.routes, (r) => {
+      route = r;
+      $('rescueNonOpioidDose').value = '';
+      $('rescueNonOpioidDoseField').hidden = false;
+    });
+  });
+  $('addRescueNonOpioid').addEventListener('click', () => {
+    const amount = num('rescueNonOpioidDose');
+    if (!nonOpioid) { toast('Pick the drug first'); return; }
+    if (!route) { toast('IV or PR?'); return; }
+    if (amount == null || !(amount > 0)) { toast('Type the dose that was given'); return; }
+    pacuStore(F.paedTab).rescue.push({ drug: nonOpioid, route, amount, unit: 'mg', opioid: false });
+    $('rescueNonOpioidDose').value = '';
+    drawRescue();
+  });
+
+  optionRow('edAgent', edAgents.map((a) => ({ label: a.name, value: a.name })), (name) => {
+    edAgent = edAgents.find((a) => a.name === name) || null;
+    $('edUnit').textContent = edAgent ? `(${edAgent.unit})` : '';
+    $('edDose').value = '';
+    $('edDoseField').hidden = !edAgent;
+  });
+  $('addEd').addEventListener('click', () => {
+    const amount = num('edDose');
+    if (!edAgent) { toast('Pick the agent first'); return; }
+    if (amount == null || !(amount > 0)) { toast('Type the dose that was given'); return; }
+    pacuStore(F.paedTab).delirium.push({ drug: edAgent.name, amount, unit: edAgent.unit });
+    $('edDose').value = '';
+    drawDelirium();
+  });
+}
+
+function drawRescue() {
+  const store = (F.paed[F.paedTab] ||= {});
+  const log = pacuStore(F.paedTab).rescue;
+  const weight = F.m1.weight_kg;
+  const list = $('rescueList');
+  list.replaceChildren();
+
+  let mme = 0;
+  const unconverted = new Set();
+
+  log.forEach((d, i) => {
+    let per = weight ? `${Math.round((d.amount / weight) * 1000) / 1000} ${d.unit}/kg` : 'needs weight';
+    if (d.opioid) {
+      if (resolveMmeKey(d.drug, d.route)) {
+        mme += doseMme({ drug: d.drug, route: d.route, amount: d.amount, unit: d.unit });
+      } else {
+        unconverted.add(d.drug);
+        per += ' · not converted';
+      }
+    }
+    list.append(el('li', {},
+      el('span', { text: `${d.drug} ${d.route} ${d.amount} ${d.unit}` }),
+      el('span', { class: 'muted', text: per }),
+      el('button', {
+        type: 'button', class: 'linkish', text: 'remove',
+        onclick: () => { log.splice(i, 1); drawRescue(); },
+      })));
+  });
+
+  const anyOpioid = log.some((d) => d.opioid);
+  store.rescue_doses = log.length ? log.map((d) => `${d.drug} ${d.route} ${d.amount} ${d.unit}`).join('; ') : null;
+  store.rescue_dose_count = log.length;
+  store.rescue_mme_mg = anyOpioid ? Math.round(mme * 1000) / 1000 : null;
+  store.rescue_mme_per_kg = (store.rescue_mme_mg != null && weight)
+    ? Math.round((store.rescue_mme_mg / weight) * 1000) / 1000 : null;
+  store.rescue_mme_excluded = unconverted.size ? [...unconverted].join('; ') : null;
+
+  const value = $('rescueMme').lastChild;
+  value.replaceChildren();
+  if (!anyOpioid) {
+    value.append('—');
+  } else if (store.rescue_mme_per_kg != null) {
+    value.append(`${store.rescue_mme_per_kg} mg/kg`,
+      el('span', { class: 'sub', text: `${store.rescue_mme_mg} mg total` }));
+  } else {
+    value.append('— mg/kg', el('span', { class: 'sub', text: `${store.rescue_mme_mg} mg total` }));
+  }
+
+  const note = $('rescueNote');
+  if (unconverted.size) {
+    note.className = 'note warn';
+    note.textContent = `${[...unconverted].join(' and ')} has no published IV conversion, so it is recorded but left out of the morphine equivalent.`;
+  } else if (anyOpioid && !weight) {
+    note.className = 'note warn';
+    note.textContent = 'Enter the weight in Module 1 to express this per kilogram.';
+  } else {
+    note.className = 'note';
+    note.textContent = 'Everything given for pain at this timepoint. Opioids are added to the morphine equivalent.';
+  }
+}
+
+function drawDelirium() {
+  const store = (F.paed[F.paedTab] ||= {});
+  const log = pacuStore(F.paedTab).delirium;
+  const weight = F.m1.weight_kg;
+  const list = $('edList');
+  list.replaceChildren();
+
+  log.forEach((d, i) => {
+    const per = weight ? `${Math.round((d.amount / weight) * 1000) / 1000} ${d.unit}/kg` : 'needs weight';
+    list.append(el('li', {},
+      el('span', { text: `${d.drug} ${d.amount} ${d.unit}` }),
+      el('span', { class: 'muted', text: per }),
+      el('button', {
+        type: 'button', class: 'linkish', text: 'remove',
+        onclick: () => { log.splice(i, 1); drawDelirium(); },
+      })));
+  });
+
+  params().pacuDelirium.agents.forEach((a) => {
+    delete store[`delirium_${a.name.toLowerCase()}_${a.unit}`];
+    delete store[`delirium_${a.name.toLowerCase()}_per_kg`];
+  });
+  for (const d of log) {
+    const key = d.drug.toLowerCase();
+    store[`delirium_${key}_${d.unit}`] = d.amount;
+    if (weight) store[`delirium_${key}_per_kg`] = Math.round((d.amount / weight) * 1000) / 1000;
+  }
+  store.delirium_doses = log.length ? log.map((d) => `${d.drug} ${d.amount} ${d.unit}`).join('; ') : null;
+
+  const note = $('edNote');
+  if (!log.length) {
+    note.className = 'note';
+    note.textContent = 'Calming and reassurance first. Record a drug only if one was given.';
+  } else if (!weight) {
+    note.className = 'note warn';
+    note.textContent = 'Enter the weight in Module 1 to express these per kilogram.';
+  } else {
+    note.className = 'note ok';
+    note.textContent = store.delirium_doses;
+  }
+}
+
+function drawPacuPathways() {
+  const store = F.paed[F.paedTab] || {};
+  const verdict = $('paedVerdict');
+
+  if (store.total == null) {
+    $('painPath').hidden = true;
+    $('deliriumPath').hidden = true;
+    verdict.textContent = '';
+    verdict.className = 'note';
+    return;
+  }
+
+  const { pathway, message } = pacuPathway({
+    paedTotal: store.total,
+    purposeful: store.purposeful ?? null,
+    eyeContact: store.eye_contact ?? null,
+  });
+  store.pacu_pathway = pathway;
+  verdict.textContent = message;
+  verdict.className = `note ${pathway === 'delirium' ? 'warn' : pathway === 'pain' ? 'ok' : ''}`;
+
+  $('painPath').hidden = pathway !== 'pain';
+  $('deliriumPath').hidden = pathway !== 'delirium';
+
+  if (pathway === 'pain') {
+    $('pacuScaleLabel').textContent = `Pain score — ${toolName(routed ? routed.tool : null) || 'enter the age in Module 1'}`;
+    paintScale($('pacuScale'), store, 'pacu_pain');
+    drawRescue();
+  }
+  if (pathway === 'delirium') drawDelirium();
 }
 
 function refreshPaedTabs() {
   markSaveButton('m3', F.paedTab);
+  drawPacuPathways();
   [...$('paedTabs').children].forEach((b) => {
     b.classList.toggle('on', b.dataset.tp === F.paedTab);
     b.classList.toggle('filled', Boolean(F.paed[b.dataset.tp]?.saved));
@@ -1268,28 +1489,15 @@ function drawPaedItems() {
 function updatePaedTotal() {
   const store = F.paed[F.paedTab] || {};
   const out = $('paedTotal').lastChild;
-  const verdict = $('paedVerdict');
   try {
-    const total = paedTotal(store);
-    store.total = total;
-    out.textContent = `${total} / 20`;
-    const cutoff = params().thresholds.paedEdCutoff;
-    if (total >= cutoff && store.purposeful === 0) {
-      verdict.textContent = 'Emergence delirium likely — calming and reassurance, not more opioid.';
-      verdict.className = 'note warn';
-    } else if (total >= cutoff) {
-      verdict.textContent = `PAED ${total}. If movement is purposeful and the child makes eye contact, treat as pain.`;
-      verdict.className = 'note warn';
-    } else {
-      verdict.textContent = 'Below the emergence-delirium cutoff. Distress here is more likely to be pain.';
-      verdict.className = 'note ok';
-    }
+    store.total = paedTotal(store);
+    out.textContent = `${store.total} / 20`;
   } catch {
     store.total = null;
     out.textContent = '— / 20';
-    verdict.textContent = '';
-    verdict.className = 'note';
   }
+  // The score is a question; what follows is the answer it points at.
+  drawPacuPathways();
 }
 
 /* ---------------- Module 4: ward pain ---------------- */
@@ -1408,7 +1616,7 @@ const FLACC = [
 ];
 
 function flaccUI(store, which) {
-  const key = which === 'rest' ? 'flacc_rest' : 'flacc_move';
+  const key = which === 'rest' ? 'flacc_rest' : which === 'move' ? 'flacc_move' : `flacc_${which}`;
   const items = (store[key] ||= {});
   const wrap = el('div', {});
   const totalEl = el('div', { class: 'total' },

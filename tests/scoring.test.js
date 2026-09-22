@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   flaccTotal, paedTotal, fpsrScore, nrsScore, mypasSfScore, painBand, bmi,
   localAnaestheticDose, doseMme, fentanylEquivalents, pacuClassification,
-  respiratoryDepression, restrictedForAge, resolveMmeKey,
+  respiratoryDepression, restrictedForAge, resolveMmeKey, pacuPathway,
 } from '../lib/scoring.js';
 
 const at = '2026-09-11';
@@ -264,4 +264,31 @@ test('adrenaline raises the lidocaine ceiling and nothing else', () => {
     agent: 'bupivacaine', concentrationPct: 0.25, volumeMl: 8, weightKg: 14, withEpinephrine: true,
   });
   assert.equal(bupi.maxMgPerKg, bupiEpi.maxMgPerKg);
+});
+
+test('a PACU timepoint points at pain, at delirium, or at neither', () => {
+  // Below the cutoff, distress is pain until shown otherwise.
+  assert.equal(pacuPathway({ paedTotal: 6, purposeful: 3 }).pathway, 'pain');
+  assert.equal(pacuPathway({ paedTotal: 0, purposeful: 0 }).pathway, 'pain');
+
+  // At or above it with non-purposeful movement, delirium — and the message
+  // must say what to do, because the wrong answer here is more opioid.
+  const ed = pacuPathway({ paedTotal: 14, purposeful: 0 });
+  assert.equal(ed.pathway, 'delirium');
+  assert.match(ed.message, /not more opioid/);
+
+  // The same total with purposeful movement is pain: purpose overrides score.
+  const override = pacuPathway({ paedTotal: 14, purposeful: 2, eyeContact: 3 });
+  assert.equal(override.pathway, 'pain');
+  assert.match(override.message, /purposeful/);
+
+  // An elevated total with that item unscored commits to nothing.
+  assert.equal(pacuPathway({ paedTotal: 14, purposeful: null }).pathway, 'indeterminate');
+});
+
+test('the PACU pathway turns on the cutoff and invents no threshold of its own', () => {
+  const cutoff = PARAMS.thresholds.paedEdCutoff;
+  assert.equal(pacuPathway({ paedTotal: cutoff - 1, purposeful: 0 }).pathway, 'pain');
+  assert.equal(pacuPathway({ paedTotal: cutoff, purposeful: 0 }).pathway, 'delirium');
+  assert.throws(() => pacuPathway({ paedTotal: 21, purposeful: 0 }), /PAED total/);
 });

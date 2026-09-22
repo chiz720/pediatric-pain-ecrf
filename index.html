@@ -348,6 +348,62 @@
     <div id="paedItems"></div>
     <div class="total" id="paedTotal"><span>PAED total</span><span>— / 20</span></div>
     <p class="note" id="paedVerdict"></p>
+
+    <div id="painPath" hidden>
+      <h3>Pain — score it, then treat it</h3>
+      <div class="field">
+        <span class="lbl" id="pacuScaleLabel">Pain score</span>
+        <div id="pacuScale"></div>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Rescue opioid</span>
+        <div class="opts" id="rescueOpioid"></div>
+      </div>
+      <div class="field" id="rescueOpioidDoseField" hidden>
+        <label for="rescueOpioidDose">Dose <em id="rescueOpioidUnit"></em></label>
+        <input id="rescueOpioidDose" type="number" inputmode="decimal" step="0.5" min="0" max="2000">
+        <button class="secondary" id="addRescueOpioid" type="button">Add this dose</button>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Rescue non-opioid</span>
+        <div class="opts" id="rescueNonOpioid"></div>
+      </div>
+      <div class="field" id="rescueRouteField" hidden>
+        <span class="lbl">Route</span>
+        <div class="opts yn" id="rescueRoute"></div>
+      </div>
+      <div class="field" id="rescueNonOpioidDoseField" hidden>
+        <label for="rescueNonOpioidDose">Dose <em>(mg)</em></label>
+        <input id="rescueNonOpioidDose" type="number" inputmode="decimal" step="1" min="0" max="2000">
+        <button class="secondary" id="addRescueNonOpioid" type="button">Add this dose</button>
+      </div>
+
+      <ul class="doses" id="rescueList"></ul>
+      <div class="total" id="rescueMme"><span>Rescue morphine equivalent</span><span>—</span></div>
+      <p class="note" id="rescueNote"></p>
+    </div>
+
+    <div id="deliriumPath" hidden>
+      <h3>Emergence delirium — calming first</h3>
+      <p class="explain">
+        Environmental calming and reassurance before any drug, and no opioid escalation.
+        Record anything that was given.
+      </p>
+      <div class="field">
+        <span class="lbl">Agent</span>
+        <div class="opts" id="edAgent"></div>
+      </div>
+      <div class="field" id="edDoseField" hidden>
+        <label for="edDose">Dose <em id="edUnit"></em></label>
+        <input id="edDose" type="number" inputmode="decimal" step="0.1" min="0" max="500">
+        <button class="secondary" id="addEd" type="button">Add this dose</button>
+      </div>
+      <ul class="doses" id="edList"></ul>
+      <p class="note" id="edNote"></p>
+    </div>
+
     <button class="save" data-save="m3">Save this PAED timepoint</button>
   </section>
 

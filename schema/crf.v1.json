@@ -2,7 +2,7 @@
   "schemaVersion": "1.0.0",
   "title": "Prospective Perioperative Pediatric Pain Assessment — eCRF",
   "generated": "2026-09-11",
-  "paramsVersion": "1.8.0",
+  "paramsVersion": "1.9.0",
   "provenanceColumns": [
     "submission_uuid", "supersedes_uuid", "study_number", "rater_id", "device_id",
     "client_ts", "server_ts", "schema_version", "app_version", "params_version", "training"
