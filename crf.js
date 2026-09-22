@@ -19,10 +19,11 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.22h-crf';
+const APP_VERSION = '2026.09.22m-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
+const SAVED_KEY = 'ppp.saved';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, attrs = {}, ...kids) => {
@@ -194,6 +195,7 @@ function readSerial() {
   F.subjectId = studyNumber;
   input.className = 'mono ok';
   note.className = 'note ok';
+  ['m1', 'm2', 'm5'].forEach((mod) => markSaveButton(mod));
 
   if (freshlyAllocated.has(studyNumber)) {
     note.textContent = `${studyNumber} — new number. Write it on the paper form before the child leaves.`;
@@ -646,6 +648,7 @@ function buildModule3() {
 }
 
 function refreshPaedTabs() {
+  markSaveButton('m3', F.paedTab);
   [...$('paedTabs').children].forEach((b) => {
     b.classList.toggle('on', b.dataset.tp === F.paedTab);
     b.classList.toggle('filled', Boolean(F.paed[b.dataset.tp]?.saved));
@@ -722,6 +725,7 @@ function buildModule4() {
 }
 
 function refreshWardTabs() {
+  markSaveButton('m4', F.wardTab);
   [...$('wardTabs').children].forEach((b) => {
     b.classList.toggle('on', b.dataset.tp === F.wardTab);
     b.classList.toggle('filled', Boolean(F.ward[b.dataset.tp]?.saved));
@@ -879,6 +883,33 @@ function updateOmePerKg() {
 
 /* ---------------- saving ---------------- */
 
+/**
+ * What this phone last sent for each module, so a second save supersedes it.
+ *
+ * Theatre saves the start times at induction and comes back for the end times
+ * after closure; the ward types a timepoint it corrects an hour later. Rows
+ * are append-only, so the correction is a new row — but it has to carry
+ * `supersedes_uuid`, or the workbook holds two rows for one event with nothing
+ * saying which one is true. Kept in localStorage rather than memory because
+ * the hour between knife and closure is long enough for a phone to lock, a
+ * tab to be dropped, and the page to reload.
+ */
+const savedKey = (studyNumber, mod, timepoint) => `${studyNumber}|${mod}|${timepoint || ''}`;
+
+function lastSavedUuid(studyNumber, mod, timepoint) {
+  try {
+    return JSON.parse(localStorage.getItem(SAVED_KEY) || '{}')[savedKey(studyNumber, mod, timepoint)] || null;
+  } catch { return null; }
+}
+
+function rememberSaved(studyNumber, mod, timepoint, uuid) {
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(SAVED_KEY) || '{}'); } catch { all = {}; }
+  all[savedKey(studyNumber, mod, timepoint)] = uuid;
+  localStorage.setItem(SAVED_KEY, JSON.stringify(all));
+}
+
+
 const SHEETS = {
   m1: '01_baseline', m2: '02_intraop', m3: '03_paed', m4: '04_ward_pain', m5: '05_recovery',
 };
@@ -940,9 +971,14 @@ async function saveModule(mod) {
   if (mod === 'm5') data = { ...header, ...F.m5 };
 
   const btn = document.querySelector(`[data-save="${mod}"]`);
+  const supersedes = lastSavedUuid(F.subjectId, mod, timepoint);
   btn.disabled = true;
-  await sync.submit({ form: SHEETS[mod], studyNumber: F.subjectId, timepoint, data });
+  const record = await sync.submit({
+    form: SHEETS[mod], studyNumber: F.subjectId, timepoint, data, supersedes,
+  });
+  rememberSaved(F.subjectId, mod, timepoint, record.uuid);
   btn.disabled = false;
+  markSaveButton(mod, timepoint);
 
   if (mod === 'm3') { (F.paed[F.paedTab] ||= {}).saved = true; refreshPaedTabs(); }
   if (mod === 'm4') { (F.ward[F.wardTab] ||= {}).saved = true; refreshWardTabs(); }
@@ -953,7 +989,23 @@ async function saveModule(mod) {
   // no signal, where the endpoint cannot be asked.
   if (mod === 'm1') { rememberEnrolled(F.subjectId); saySeen(F.subjectId, 'yes'); }
 
-  toast(navigator.onLine ? 'Saved' : 'Saved on this phone — will send when there is signal');
+  const how = supersedes ? 'Updated' : 'Saved';
+  toast(navigator.onLine ? how : `${how} on this phone — will send when there is signal`);
+}
+
+/**
+ * A module already sent says so on its own button.
+ *
+ * Coming back to a half-filled module is the normal way theatre works, not an
+ * error, so the button stops saying "Save" and starts saying "Update" — the
+ * second tap is expected, and the row it writes supersedes the first.
+ */
+function markSaveButton(mod, timepoint = null) {
+  const btn = document.querySelector(`[data-save="${mod}"]`);
+  if (!btn) return;
+  if (!btn.dataset.label) btn.dataset.label = btn.textContent;
+  const sent = F.subjectId && lastSavedUuid(F.subjectId, mod, timepoint);
+  btn.textContent = sent ? btn.dataset.label.replace(/^Save/, 'Update') : btn.dataset.label;
 }
 
 /* ---------------- chrome ---------------- */
