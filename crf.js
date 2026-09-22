@@ -643,8 +643,26 @@ function buildModule2() {
 
   $('incision').addEventListener('input', () => { F.m2.incision = num('incision'); });
 
-  ['anaesStart', 'anaesEnd', 'surgStart', 'surgEnd']
-    .forEach((id) => $(id).addEventListener('input', updateTimes));
+  ['anaesStart', 'anaesEnd', 'surgStart', 'surgEnd'].forEach((id) => {
+    const input = $(id);
+    input.addEventListener('input', updateTimes);
+    // Tapping the field asks the browser for its own time picker. Chrome and
+    // the phones open a wheel or a clock; Safari on a Mac has none and simply
+    // ignores this, which is why Now exists beside every one of them.
+    input.addEventListener('click', () => {
+      if (typeof input.showPicker === 'function') {
+        try { input.showPicker(); } catch { /* not allowed here; typing still works */ }
+      }
+    });
+  });
+  document.querySelectorAll('.nowbtn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const input = $(btn.dataset.now);
+      const now = new Date();
+      input.value = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      updateTimes();
+    });
+  });
   updateTimes();
 
   ['laConc', 'laVol'].forEach((id) =>

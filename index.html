@@ -198,21 +198,33 @@
     <div class="grid2">
       <div class="field">
         <label for="anaesStart">Anaesthesia start</label>
-        <input id="anaesStart" type="time">
+        <div class="timerow">
+          <input id="anaesStart" type="time">
+          <button type="button" class="nowbtn" data-now="anaesStart">Now</button>
+        </div>
       </div>
       <div class="field">
         <label for="anaesEnd">Anaesthesia end</label>
-        <input id="anaesEnd" type="time">
+        <div class="timerow">
+          <input id="anaesEnd" type="time">
+          <button type="button" class="nowbtn" data-now="anaesEnd">Now</button>
+        </div>
       </div>
     </div>
     <div class="grid2">
       <div class="field">
         <label for="surgStart">Surgery start <em>(knife)</em></label>
-        <input id="surgStart" type="time">
+        <div class="timerow">
+          <input id="surgStart" type="time">
+          <button type="button" class="nowbtn" data-now="surgStart">Now</button>
+        </div>
       </div>
       <div class="field">
         <label for="surgEnd">Surgery end <em>(closure)</em></label>
-        <input id="surgEnd" type="time">
+        <div class="timerow">
+          <input id="surgEnd" type="time">
+          <button type="button" class="nowbtn" data-now="surgEnd">Now</button>
+        </div>
       </div>
     </div>
     <div class="total" id="anaesTotal"><span>Anaesthesia</span><span>—</span></div>

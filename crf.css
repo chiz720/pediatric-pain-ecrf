@@ -277,6 +277,18 @@ input.bad { border-color: var(--severe); }
 .levels button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .levels button.on b { color: #fff; }
 
+/* A time field plus a one-tap Now. The four theatre times are recorded as they
+   happen, so the commonest correct answer is the current clock; tapping the
+   field itself opens the browser's own picker where one exists. */
+.timerow { display: flex; gap: 8px; align-items: stretch; }
+.timerow input[type="time"] { flex: 1; min-width: 0; }
+.nowbtn {
+  flex: none; min-height: 48px; padding: 0 16px;
+  font: inherit; font-size: 0.86rem; font-weight: 600; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: 9px;
+  background: var(--accent-soft); color: var(--accent-ink);
+}
+
 /* The running dose log. Each line is one administration, removable, because
    a dose typed twice is commoner than a dose given twice. */
 .doses { list-style: none; margin: 0 0 10px; padding: 0; }
