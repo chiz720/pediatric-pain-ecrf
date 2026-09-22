@@ -130,6 +130,24 @@
     </div>
 
     <div class="field">
+      <span class="lbl">Anxiolytic premedication</span>
+      <div class="opts yn" id="anxGiven"></div>
+    </div>
+
+    <div id="anxDetail" hidden>
+      <div class="field">
+        <span class="lbl">Agent</span>
+        <div class="opts" id="anxAgent"></div>
+      </div>
+      <div class="field" id="anxDoseField" hidden>
+        <label for="anxDose">Dose <em id="anxUnit"></em></label>
+        <input id="anxDose" type="number" inputmode="decimal" step="0.1" min="0" max="500">
+      </div>
+      <div class="total" id="anxTotal"><span>Anxiolytic</span><span>—</span></div>
+      <p class="note" id="anxNote"></p>
+    </div>
+
+    <div class="field">
       <label for="caregiverVas">Caregiver anxiety VAS <em>(/100)</em></label>
       <p class="explain">Hand the phone over: the caregiver slides to where their anxiety sits right now.</p>
       <div class="vas">

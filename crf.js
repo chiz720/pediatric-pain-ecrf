@@ -19,7 +19,7 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.22t-crf';
+const APP_VERSION = '2026.09.22u-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -333,11 +333,13 @@ function buildModule1() {
     updateOmePerKg();
     updateLaDose();
     totalOpioids();        // the per-kg morphine equivalent moves with the weight
+    updateAnxiolytic();    // and so does the premedication dose
   };
   $('weight').addEventListener('input', recalcBmi);
   $('height').addEventListener('input', recalcBmi);
 
   drawMypas();
+  buildAnxiolytic();
   // A VAS is marked blind: the caregiver sees an ungraduated line and their own
   // mark, never a number, because a visible score is anchored on and reported
   // rather than felt. The rater can reveal it afterwards to check it recorded;
@@ -365,6 +367,90 @@ function showVas() {
   $('vasBlindNote').textContent = vasRevealed
     ? 'Hide this again before the phone goes back to a caregiver.'
     : 'The number stays hidden so the caregiver marks the line, not a score.';
+}
+
+/**
+ * Anxiolytic premedication, and what it worked out to per kilogram.
+ *
+ * Premedication is dosed per kilogram — 0.5 mg/kg of midazolam, 2 mcg/kg of
+ * dexmedetomidine — so the mg on the chart is only half the record. The unit
+ * differs by agent, and it travels with the number rather than being assumed
+ * later. "No" is an answer and is recorded as one: a blank means nobody was
+ * asked, which is not the same as a child who had none.
+ */
+function buildAnxiolytic() {
+  const agents = params().anxiolytic.agents;
+  let picked = null;
+
+  yesNo('anxGiven', (given) => {
+    F.m1.anxiolytic_given = given;
+    $('anxDetail').hidden = !given;
+    if (!given) {
+      picked = null;
+      $('anxAgent').replaceChildren();
+      $('anxDose').value = '';
+      $('anxDoseField').hidden = true;
+      clearAnxiolyticDose();
+      return;
+    }
+    optionRow('anxAgent', agents.map((a) => ({ label: a.name, value: a.name })), (name) => {
+      picked = agents.find((a) => a.name === name) || null;
+      F.m1.anxiolytic_agent = picked ? picked.name : null;
+      F.m1.anxiolytic_dose_unit = picked ? picked.unit : null;
+      $('anxUnit').textContent = picked ? `(${picked.unit})` : '';
+      $('anxDose').value = '';
+      $('anxDoseField').hidden = !picked;
+      updateAnxiolytic();
+    });
+    updateAnxiolytic();
+  });
+
+  $('anxDose').addEventListener('input', () => {
+    F.m1.anxiolytic_dose = num('anxDose');
+    updateAnxiolytic();
+  });
+}
+
+function clearAnxiolyticDose() {
+  F.m1.anxiolytic_agent = null;
+  F.m1.anxiolytic_dose = null;
+  F.m1.anxiolytic_dose_unit = null;
+  F.m1.anxiolytic_dose_per_kg = null;
+  $('anxTotal').lastChild.replaceChildren('—');
+  $('anxNote').textContent = '';
+  $('anxNote').className = 'note';
+}
+
+function updateAnxiolytic() {
+  const value = $('anxTotal').lastChild;
+  const note = $('anxNote');
+  const { anxiolytic_agent: agent, anxiolytic_dose: dose, anxiolytic_dose_unit: unit } = F.m1;
+  const weight = F.m1.weight_kg;
+  F.m1.anxiolytic_dose_per_kg = null;
+  value.replaceChildren('—');
+
+  if (!agent) {
+    note.className = 'note';
+    note.textContent = 'Which agent, and how much was given.';
+    return;
+  }
+  if (dose == null || !(dose > 0)) {
+    note.className = 'note';
+    note.textContent = `${agent}, in ${unit}. The dose per kilogram works itself out.`;
+    return;
+  }
+  if (!weight) {
+    value.replaceChildren(`— ${unit}/kg`, el('span', { class: 'sub', text: `${dose} ${unit} given` }));
+    note.className = 'note warn';
+    note.textContent = 'Enter the weight above — premedication is dosed per kilogram, and without it that figure cannot be worked out.';
+    return;
+  }
+
+  F.m1.anxiolytic_dose_per_kg = Math.round((dose / weight) * 1000) / 1000;
+  value.replaceChildren(`${F.m1.anxiolytic_dose_per_kg} ${unit}/kg`,
+    el('span', { class: 'sub', text: `${dose} ${unit} given` }));
+  note.className = 'note ok';
+  note.textContent = `${agent} ${dose} ${unit} in ${weight} kg.`;
 }
 
 /**

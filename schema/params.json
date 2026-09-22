@@ -1,5 +1,5 @@
 {
-  "paramsVersion": "1.5.0",
+  "paramsVersion": "1.6.0",
   "lastReviewed": "2026-09-22",
   "countersignedBy": null,
   "countersignedOn": null,
@@ -94,6 +94,16 @@
       "Midazolam": "mg/kg",
       "Dexmedetomidine": "mcg/kg/hr"
     }
+  },
+
+  "anxiolytic": {
+    "_note": "Preoperative anxiolysis, and the unit each agent's dose is written in — midazolam and oral ketamine in mg, dexmedetomidine and clonidine in mcg. The dose per kilogram is computed from the baseline weight: it is the figure a premedication protocol is written in and the only one that compares between children.",
+    "agents": [
+      { "name": "Midazolam", "unit": "mg" },
+      { "name": "Ketamine", "unit": "mg" },
+      { "name": "Dexmedetomidine", "unit": "mcg" },
+      { "name": "Clonidine", "unit": "mcg" }
+    ]
   },
 
   "localAnaesthetic": {
