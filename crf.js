@@ -530,6 +530,9 @@ function buildModule2() {
   $('procedure').addEventListener('input', () => {
     F.m2.procedure_name = $('procedure').value.trim() || null;
   });
+  // Side is its own column rather than part of the operation text, so "left"
+  // is countable instead of something an analysis has to read out of a string.
+  optionRow('laterality', o.laterality, (v) => { F.m2.laterality = v; });
   optionRow('approach', o.approach, (v) => { F.m2.approach = v; });
   optionRow('maintenance', o.maintenance, (v) => { F.m2.maintenance = v; });
   optionRow('guidance', o.guidance, (v) => { F.m2.guidance = v; });
