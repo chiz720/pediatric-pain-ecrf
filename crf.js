@@ -18,7 +18,7 @@ import { flaccTotal, paedTotal, mypasSfScore, bmi, localAnaestheticDose } from '
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.22f-crf';
+const APP_VERSION = '2026.09.22g-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -516,7 +516,17 @@ const toolName = (tool) => ({
 
 function buildModule2() {
   const o = params().formOptions;
-  optionRow('domain', o.surgicalDomain, (v) => { F.m2.domain = v; });
+  // The domain is four broad buckets, which is what the analysis groups on.
+  // The operation itself is what a surgeon recognises the case by, so asking
+  // for it the moment a bucket is picked costs a line and keeps the two
+  // separable later.
+  optionRow('domain', o.surgicalDomain, (v) => {
+    F.m2.domain = v;
+    $('procedureField').hidden = false;
+  });
+  $('procedure').addEventListener('input', () => {
+    F.m2.procedure_name = $('procedure').value.trim() || null;
+  });
   optionRow('approach', o.approach, (v) => { F.m2.approach = v; });
   optionRow('maintenance', o.maintenance, (v) => { F.m2.maintenance = v; });
   optionRow('guidance', o.guidance, (v) => { F.m2.guidance = v; });
@@ -831,6 +841,11 @@ async function saveModule(mod) {
     return;
   }
 
+  if (mod === 'm2' && F.m2.domain && !F.m2.procedure_name) {
+    toast('Name the operation, not just the domain');
+    $('procedure').focus();
+    return;
+  }
   if (mod === 'm1' && !F.m1.hospital_number) {
     toast('Enter the hospital inpatient number first');
     $('hospitalNo').focus();

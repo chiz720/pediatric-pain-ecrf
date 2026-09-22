@@ -2,7 +2,7 @@
   "schemaVersion": "1.0.0",
   "title": "Prospective Perioperative Pediatric Pain Assessment — eCRF",
   "generated": "2026-09-11",
-  "paramsVersion": "1.2.0",
+  "paramsVersion": "1.3.0",
   "provenanceColumns": [
     "submission_uuid", "supersedes_uuid", "study_number", "rater_id", "device_id",
     "client_ts", "server_ts", "schema_version", "app_version", "params_version", "training"
@@ -217,6 +217,9 @@
         ]},
         { "id": "surgery", "title": "Surgical data", "items": [
           { "id": "procedure_performed", "label": "Procedure performed", "type": "select", "required": true, "sameOptionsAs": "procedure_category" },
+          { "id": "procedure_name", "label": "Specific operation", "type": "text", "required": true, "freeText": true,
+            "showIf": { "field": "procedure_performed", "op": "present" },
+            "help": "The operation as written on the operation note. The category is what the analysis groups on; this is what a surgeon recognises the case by. No patient names \u2014 the nightly scan reads this field." },
           { "id": "technique", "label": "Technique", "type": "select", "required": true, "options": ["Open", "Minimally invasive"] },
           { "id": "incision_length_cm", "label": "Incision length", "type": "decimal", "required": true, "unit": "cm", "min": 0, "max": 60, "step": 0.5 },
           { "id": "surgeon_grade", "label": "Primary operator", "type": "select", "required": true, "options": ["Consultant", "Fellow", "Registrar", "Medical officer"] }
