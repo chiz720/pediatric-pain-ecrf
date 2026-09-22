@@ -13,12 +13,15 @@
 import { CONFIG } from './config.js';
 import { loadParams, params } from './lib/params.js';
 import { selectInstrument, monthsLabel, TOOLS } from './lib/routing.js';
-import { flaccTotal, paedTotal, bmi, localAnaestheticDose } from './lib/scoring.js';
-import { validate as checkSubjectId } from './lib/studyNumber.js';
+import { ageMonths, ageLabel, isFuture } from './lib/age.js';
+import { flaccTotal, paedTotal, mypasSfScore, bmi, localAnaestheticDose } from './lib/scoring.js';
+import { validate as checkSubjectId, format as formatSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.11-crf';
+const APP_VERSION = '2026.09.22e-crf';
 const WHO_KEY = 'ppp.who';
+const CENTRE_KEY = 'ppp.centre';
+const ENROLLED_KEY = 'ppp.enrolled';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, attrs = {}, ...kids) => {
@@ -43,8 +46,10 @@ const F = {
   ward: {},                 // { T2: {rest, move, rebound, rescue}, ... }
   paedTab: 'P0', wardTab: 'T2',
 };
-let who = null;
+let who = '';
+let centre = null;                 // { code, name } — the phone's enrolling centre
 let routed = null;
+let syncCfg = null;
 
 /* ------------------------------------------------------------------ */
 
@@ -52,20 +57,28 @@ async function boot() {
   const paramsJson = await fetch('./schema/params.json').then((r) => r.json());
   loadParams(paramsJson);
 
-  who = localStorage.getItem(WHO_KEY) || await askWho();
-  $('who').textContent = `Evaluator: ${who}`;
-  $('evaluator').textContent = who;
-  $('changeWho').addEventListener('click', async () => {
-    localStorage.removeItem(WHO_KEY);
-    who = await askWho();
-    $('who').textContent = `Evaluator: ${who}`;
-    $('evaluator').textContent = who;
-  });
-
-  sync.configure({
+  syncCfg = {
     endpointUrl: CONFIG.endpointUrl, token: CONFIG.campKey,
-    deviceId: deviceId(), raterId: who, training: false,
+    deviceId: deviceId(), raterId: null, training: false,
     schemaVersion: '1.0.0', paramsVersion: paramsJson.paramsVersion, appVersion: APP_VERSION,
+  };
+
+  // Evaluator is typed, not chosen: locums and swapped shifts mean the name on
+  // the record is often not one config.js knows about. The camp list is offered
+  // as suggestions so the regulars still type once and then tap.
+  who = localStorage.getItem(WHO_KEY) || '';
+  $('collectorList').replaceChildren(...CONFIG.collectors.map((name) => el('option', { value: name })));
+  $('evaluator').value = who;
+  $('evaluator').addEventListener('input', () => {
+    who = $('evaluator').value.trim();
+    localStorage.setItem(WHO_KEY, who);
+    showWho();
+  });
+  showWho();
+  $('changeWho').addEventListener('click', () => {
+    $('evaluator').scrollIntoView({ block: 'center', behavior: 'smooth' });
+    $('evaluator').focus();
+    $('evaluator').select();
   });
   sync.onChange(showPending);
   sync.startAutoSync();
@@ -73,9 +86,13 @@ async function boot() {
 
   $('evalDate').value = new Date().toISOString().slice(0, 10);
   F.evalDate = $('evalDate').value;
-  $('evalDate').addEventListener('input', () => { F.evalDate = $('evalDate').value; });
+  $('evalDate').addEventListener('input', () => {
+    F.evalDate = $('evalDate').value;
+    ageFromDob();          // age is age *at assessment*, so it moves with the date
+  });
 
   buildAdmin();
+  showWho();              // the header line carries the centre too, and buildAdmin restores it
   buildModule1();
   buildModule2();
   buildModule3();
@@ -92,18 +109,91 @@ function deviceId() {
   return id;
 }
 
-function askWho() {
-  return new Promise((resolve) => {
-    const overlay = el('div', { class: 'card', style: 'position:fixed;inset:0;z-index:40;margin:0;border-radius:0;overflow:auto;padding:28px 18px' },
-      el('h2', { text: 'Who is the evaluator?' }),
-      el('p', { class: 'explain', text: 'Tap your name. You will not be asked again on this phone.' }),
-      el('div', { class: 'checks' },
-        ...CONFIG.collectors.map((name) => el('button', {
-          type: 'button', text: name,
-          onclick: () => { localStorage.setItem(WHO_KEY, name); overlay.remove(); resolve(name); },
-        }))));
-    document.body.append(overlay);
-  });
+/** Header line and rater attribution follow whatever is typed in the field. */
+function showWho() {
+  const parts = [centre && centre.name, who || 'evaluator not set'].filter(Boolean);
+  $('who').textContent = parts.join(' · ');
+  $('changeWho').textContent = who ? 'change' : 'add';
+  sync.configure({ ...syncCfg, raterId: who || null });
+}
+
+/* ---------------- study serial ---------------- */
+
+/**
+ * The serial is assembled, not typed.
+ *
+ * Three centres enrol at the same time, so the number has to come from
+ * somewhere that cannot hand the same one to two people: each centre's paper
+ * enrolment log. What the app does is remove the two parts of the number that
+ * are easiest to get wrong — the centre prefix, which comes from the phone's
+ * centre, and the mod-11 check character, which is computed. Four digits are
+ * typed, and a transposition in those four is what the check character exists
+ * to catch.
+ */
+function readSerial() {
+  const input = $('subjectSeq');
+  const digits = input.value;
+  const note = $('subjectNote');
+
+  $('serialPrefix').textContent = centre ? `PPP-${centre.code}-` : 'PPP-··-';
+  $('serialCheck').textContent = '-·';
+  input.className = 'mono';
+  F.subjectId = '';
+
+  if (!centre) {
+    note.className = 'note warn';
+    note.textContent = 'Pick the centre first — it is the middle of every study number.';
+    return;
+  }
+  if (digits.length < 4) {
+    note.className = 'note';
+    note.textContent = digits
+      ? 'Four digits, as written in this centre’s enrolment log.'
+      : 'The number from this centre’s enrolment log.';
+    return;
+  }
+
+  F.subjectId = formatSubjectId(centre.code, digits);
+  $('serialCheck').textContent = `-${F.subjectId.slice(-1)}`;
+  input.className = 'mono ok';
+  note.className = 'note ok';
+  note.textContent = `${F.subjectId} — check character worked out for you.`;
+  flagIfEnrolled(F.subjectId);
+}
+
+function enrolledHere() {
+  try { return new Set(JSON.parse(localStorage.getItem(ENROLLED_KEY) || '[]')); } catch { return new Set(); }
+}
+
+function rememberEnrolled(studyNumber) {
+  const set = enrolledHere();
+  set.add(studyNumber);
+  localStorage.setItem(ENROLLED_KEY, JSON.stringify([...set]));
+}
+
+/**
+ * A number that already has a baseline row is normal for Modules 2-5 and a
+ * mistake for Module 1, so it is said plainly and blocks nothing. Checked on
+ * this phone first, which works with no signal; the endpoint is asked only to
+ * catch the case where another phone enrolled the child.
+ */
+let serialProbe = 0;
+function flagIfEnrolled(studyNumber) {
+  if (enrolledHere().has(studyNumber)) { sayEnrolled(studyNumber, 'on this phone'); return; }
+  const probe = ++serialProbe;
+  sync.isEnrolled(studyNumber)
+    .then((yes) => {
+      if (yes && probe === serialProbe && F.subjectId === studyNumber) {
+        sayEnrolled(studyNumber, 'in the workbook');
+      }
+    })
+    .catch(() => {});
+}
+
+function sayEnrolled(studyNumber, where) {
+  const note = $('subjectNote');
+  note.className = 'note warn';
+  note.textContent = `${studyNumber} already has a baseline row ${where}. Right for Modules 2–5 — but do not enrol the same child twice.`;
 }
 
 /* ---------------- shared builders ---------------- */
@@ -132,17 +222,25 @@ const yesNo = (container, onPick) =>
 /* ---------------- administrative ---------------- */
 
 function buildAdmin() {
-  const input = $('subjectId');
-  input.addEventListener('input', () => {
-    input.value = input.value.toUpperCase();
-    F.subjectId = input.value.trim();
-    const note = $('subjectNote');
-    if (!F.subjectId) { input.className = 'mono'; note.textContent = ''; return; }
-    const r = checkSubjectId(F.subjectId);
-    input.className = `mono ${r.valid ? 'ok' : 'bad'}`;
-    note.textContent = r.valid ? '✓ check character matches' : 'Check the ID — the last character does not match.';
-    note.className = `note ${r.valid ? 'ok' : 'bad'}`;
+  centre = CONFIG.centres.find((c) => c.code === localStorage.getItem(CENTRE_KEY)) || null;
+  optionRow('centre', CONFIG.centres.map((c) => ({ label: c.name, value: c.code })), (code) => {
+    centre = CONFIG.centres.find((c) => c.code === code) || null;
+    localStorage.setItem(CENTRE_KEY, code);
+    showWho();
+    readSerial();
+  }, centre ? centre.code : undefined);
+
+  const seq = $('subjectSeq');
+  seq.addEventListener('input', () => {
+    const digits = seq.value.replace(/\D/g, '').slice(0, 4);
+    if (digits !== seq.value) seq.value = digits;
+    readSerial();
   });
+  // 31 typed in a hurry is the same child as 0031 in the log.
+  seq.addEventListener('blur', () => {
+    if (seq.value && seq.value.length < 4) { seq.value = seq.value.padStart(4, '0'); readSerial(); }
+  });
+  readSerial();
 
   const box = $('consent');
   params().formOptions.consent.forEach((label) => {
@@ -161,6 +259,10 @@ function buildAdmin() {
 function buildModule1() {
   const o = params().formOptions;
 
+  $('hospitalNo').addEventListener('input', () => {
+    F.m1.hospital_number = $('hospitalNo').value.trim() || null;
+  });
+  $('dob').addEventListener('input', ageFromDob);
   $('ageMonths').addEventListener('input', () => {
     F.m1.age_months = num('ageMonths');
     applyRouting();
@@ -182,8 +284,159 @@ function buildModule1() {
   $('weight').addEventListener('input', recalcBmi);
   $('height').addEventListener('input', recalcBmi);
 
-  $('mypas').addEventListener('input', () => { F.m1.mypas_sf = num('mypas'); });
-  $('caregiverVas').addEventListener('input', () => { F.m1.caregiver_vas = num('caregiverVas'); });
+  drawMypas();
+  // A VAS is marked blind: the caregiver sees an ungraduated line and their own
+  // mark, never a number, because a visible score is anchored on and reported
+  // rather than felt. The rater can reveal it afterwards to check it recorded;
+  // moving the line re-hides it, so handing the phone to the next caregiver
+  // never shows them the last one's answer. Nothing reads out until the line is
+  // touched either — 50 is not a neutral default, it is the middle of the scale.
+  const vas = $('caregiverVas');
+  vas.addEventListener('input', () => {
+    vas.classList.remove('unset');
+    F.m1.caregiver_vas = Number(vas.value);
+    vasRevealed = false;
+    showVas();
+  });
+  $('vasReveal').addEventListener('click', () => { vasRevealed = !vasRevealed; showVas(); });
+}
+
+let vasRevealed = false;
+
+function showVas() {
+  const v = F.m1.caregiver_vas;
+  const marked = v != null;
+  $('vasValue').textContent = !marked ? 'Not yet marked' : vasRevealed ? `${v} / 100` : 'Marked ✓';
+  $('vasReveal').hidden = !marked;
+  $('vasReveal').textContent = vasRevealed ? 'hide the score' : 'show the score';
+  $('vasBlindNote').textContent = vasRevealed
+    ? 'Hide this again before the phone goes back to a caregiver.'
+    : 'The number stays hidden so the caregiver marks the line, not a score.';
+}
+
+/**
+ * m-YPAS-SF, picked rather than typed.
+ *
+ * Four domains, each an ordinal 1..max — and the score is the mean of
+ * (item / item maximum) across them, x100, which is not arithmetic anyone
+ * should be doing between cases. The rater picks four lines; `mypasSfScore`
+ * does the rest. The picks are submitted alongside the score, so the total is
+ * always re-derivable from what was actually observed.
+ *
+ * Anchors are condensed for a phone screen; the domain maxima are the
+ * instrument's own (vocalisation runs to 6, the rest to 4).
+ */
+const MYPAS = [
+  ['activity', 'Activity', [
+    'Looking around, curious, playing',
+    'Not exploring, looks down, fidgets',
+    'Unfocused, squirming, pushes things away',
+    'Trying to get away, clinging, frantic',
+  ]],
+  ['vocalisation', 'Vocalisation', [
+    'Talking, asking questions, babbling, laughing',
+    'Whispers, baby talk, nods only',
+    'Silent, no response',
+    'Whimpering, moaning, crying without sound',
+    'Crying, or saying “no”',
+    'Loud sustained crying or screaming',
+  ]],
+  ['expressivity', 'Emotional expressivity', [
+    'Happy, smiling, absorbed in play',
+    'Neutral, no expression',
+    'Worried, sad, tearful eyes',
+    'Distressed, crying, eyes wide',
+  ]],
+  ['arousal', 'State of apparent arousal', [
+    'Alert, looks around, watches what you do',
+    'Withdrawn, quiet, still',
+    'Vigilant, startles easily, tense',
+    'Panicked, crying, pushing others away',
+  ]],
+];
+
+function drawMypas() {
+  const box = $('mypasItems');
+  box.replaceChildren();
+  MYPAS.forEach(([key, title, levels]) => {
+    const row = el('div', { class: 'levels' });
+    levels.forEach((text, i) => {
+      const value = i + 1;            // m-YPAS domains are scored from 1, not 0
+      row.append(el('button', {
+        type: 'button', class: F.m1[`mypas_${key}`] === value ? 'on' : '',
+        onclick: (e) => {
+          F.m1[`mypas_${key}`] = value;
+          [...row.children].forEach((c) => c.classList.remove('on'));
+          e.currentTarget.classList.add('on');
+          updateMypas();
+        },
+      }, el('b', { text: String(value) }), el('span', { text })));
+    });
+    box.append(el('div', { class: 'item' }, el('p', { class: 'item-q', text: title }), row));
+  });
+  updateMypas();
+}
+
+function updateMypas() {
+  const out = $('mypasTotal').lastChild;
+  const note = $('mypasNote');
+  const domains = {};
+  MYPAS.forEach(([key]) => {
+    const v = F.m1[`mypas_${key}`];
+    if (v != null) domains[key] = v;
+  });
+
+  const missing = MYPAS.length - Object.keys(domains).length;
+  if (missing > 0) {
+    F.m1.mypas_sf = null;
+    out.textContent = '— / 100';
+    note.className = 'note';
+    note.textContent = `${missing} domain${missing === 1 ? '' : 's'} still to pick.`;
+    return;
+  }
+  F.m1.mypas_sf = mypasSfScore(domains);
+  out.textContent = `${F.m1.mypas_sf} / 100`;
+  note.className = 'note ok';
+  note.textContent = 'Worked out from the four picks. 22.92 is the floor — a completely calm child.';
+}
+
+const DOB_HINT = 'Works out the age. Stays on this phone — it is never saved or sent.';
+
+/**
+ * Date of birth in, completed months out.
+ *
+ * The birth date is a calculator input and nothing else: it is read straight
+ * from the DOM, never written into `F`, never persisted, and never part of a
+ * submission — `age_months` is the only thing that leaves the phone, which is
+ * what keeps the workbook a non-identifiable dataset. Months are completed
+ * calendar months (lib/age.js), not a day count divided by 30.4.
+ */
+function ageFromDob() {
+  const dob = $('dob').value;
+  const note = $('dobNote');
+  const at = F.evalDate || new Date().toISOString().slice(0, 10);
+
+  if (!dob) { note.className = 'note'; note.textContent = DOB_HINT; return; }
+
+  let months;
+  try {
+    if (isFuture(dob, at)) {
+      note.className = 'note bad';
+      note.textContent = 'That birth date is after the assessment date. Check it.';
+      return;
+    }
+    months = ageMonths(dob, at);
+  } catch {
+    note.className = 'note bad';
+    note.textContent = 'That is not a real date.';
+    return;
+  }
+
+  $('ageMonths').value = String(months);
+  F.m1.age_months = months;
+  note.className = 'note ok';
+  note.textContent = `${ageLabel(dob, at)} on ${at}. Only the age in months is saved.`;
+  applyRouting();
 }
 
 /** Age decides the scale, here and in Module 4. Nobody ticks a box for it. */
@@ -523,14 +776,23 @@ const SHEETS = {
 async function saveModule(mod) {
   const id = checkSubjectId(F.subjectId);
   if (!id.valid) {
-    toast('Enter a valid Subject ID first');
-    $('subjectId').focus();
+    toast(centre ? 'Type the four-digit serial number first' : 'Pick the centre first');
+    $(centre ? 'subjectSeq' : 'centre').focus();
+    scrollTo({ top: 0, behavior: 'smooth' });
+    return;
+  }
+
+  if (!who) {
+    toast('Enter the evaluator name first');
+    $('evaluator').focus();
     scrollTo({ top: 0, behavior: 'smooth' });
     return;
   }
 
   const header = {
     subject_id: F.subjectId,
+    centre: centre.code,
+    centre_name: centre.name,
     consent: [...F.consent].join('; '),
     evaluator: who,
     eval_date: F.evalDate,
@@ -567,6 +829,9 @@ async function saveModule(mod) {
   if (['m1', 'm2', 'm5'].includes(mod)) {
     document.querySelector(`[data-module="${mod}"]`).classList.add('done');
   }
+  // Remembered locally so the "already enrolled" warning survives a camp with
+  // no signal, where the endpoint cannot be asked.
+  if (mod === 'm1') { rememberEnrolled(F.subjectId); sayEnrolled(F.subjectId, 'on this phone'); }
 
   toast(navigator.onLine ? 'Saved' : 'Saved on this phone — will send when there is signal');
 }

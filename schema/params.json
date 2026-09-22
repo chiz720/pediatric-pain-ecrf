@@ -1,6 +1,6 @@
 {
-  "paramsVersion": "1.0.0",
-  "lastReviewed": "2026-09-11",
+  "paramsVersion": "1.1.0",
+  "lastReviewed": "2026-09-22",
   "countersignedBy": null,
   "countersignedOn": null,
   "_note": "Every value here is a protocol parameter with a published source. Changing any of them changes a study endpoint. Bump paramsVersion, record the countersignature, and never edit mid-camp.",
@@ -293,13 +293,15 @@
   "privacy": {
     "_note": "Enforced by tests/schema.test.js. A build fails if any form outside identifierAllowedForms declares a field in identifierFields.",
     "identifierFields": [
-      "date_of_birth"
+      "date_of_birth",
+      "hospital_number"
     ],
     "identifierAllowedForms": [
       "01_enrolment"
     ],
     "excludeFromAnalysisExtract": [
-      "date_of_birth"
+      "date_of_birth",
+      "hospital_number"
     ],
     "freeTextFields": [
       "diagnosis_detail",

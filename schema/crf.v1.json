@@ -2,7 +2,7 @@
   "schemaVersion": "1.0.0",
   "title": "Prospective Perioperative Pediatric Pain Assessment — eCRF",
   "generated": "2026-09-11",
-  "paramsVersion": "1.0.0",
+  "paramsVersion": "1.1.0",
   "provenanceColumns": [
     "submission_uuid", "supersedes_uuid", "study_number", "rater_id", "device_id",
     "client_ts", "server_ts", "schema_version", "app_version", "params_version", "training"
@@ -118,6 +118,8 @@
             "pattern": "^PPP-[A-Z]{2}-\\d{4}-[0-9X]$",
             "validate": ["check_character", "unique_against_roster"],
             "help": "Type it exactly as written on the wristband. The last character is a check digit: if it does not match, the number was mistyped." },
+          { "id": "hospital_number", "label": "Hospital number", "type": "text", "required": true, "identifier": true,
+            "help": "The child's number at the enrolling hospital, exactly as written on the chart. It is declared here and nowhere else — it is what lets a query be traced back to a patient record, which is also why it never travels into the assessment modules or the analysis extract." },
           { "id": "date_of_birth", "label": "Date of birth", "type": "date_parts", "required": true,
             "identifier": true,
             "echo": "computed_age_label",

@@ -21,8 +21,18 @@ export const CONFIG = {
    */
   campKey: 'CAMP-2026-KN',
 
-  siteCode: 'KN',
-  campId: 'KN-2026-01',
+  /**
+   * The enrolling centres. The two-letter code is the middle of every study
+   * number — PPP-CH-0031-1 — so it is fixed for the life of the study. A
+   * collector taps their centre once and the app never asks again.
+   */
+  centres: [
+    { code: 'CH', name: 'Chuka Hospital' },
+    { code: 'ME', name: 'Meru Hospital' },
+    { code: 'GU', name: 'Guardian Hospital' },
+  ],
+
+  campId: '2026-01',
 
   /**
    * Who is collecting. A collector taps their name once; it is remembered.

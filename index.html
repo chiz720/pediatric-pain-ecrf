@@ -31,9 +31,18 @@
     <h2>Administrative &amp; enrollment</h2>
 
     <div class="field">
-      <label for="subjectId">Subject ID</label>
-      <input id="subjectId" class="mono" type="text" autocapitalize="characters"
-             autocomplete="off" spellcheck="false" placeholder="PPP-KN-0147-0">
+      <span class="lbl">Centre</span>
+      <div class="opts" id="centre"></div>
+    </div>
+
+    <div class="field">
+      <label for="subjectSeq">Study serial number</label>
+      <div class="serial">
+        <span class="serial-fix" id="serialPrefix">PPP-··-</span>
+        <input id="subjectSeq" class="mono" type="text" inputmode="numeric"
+               autocomplete="off" spellcheck="false" maxlength="4" placeholder="0031">
+        <span class="serial-fix" id="serialCheck">-·</span>
+      </div>
       <p class="note" id="subjectNote"></p>
     </div>
 
@@ -48,8 +57,10 @@
         <input id="evalDate" type="date">
       </div>
       <div class="field">
-        <span class="lbl">Evaluator</span>
-        <p class="readout" id="evaluator">—</p>
+        <label for="evaluator">Evaluator</label>
+        <input id="evaluator" type="text" list="collectorList" autocomplete="name"
+               autocapitalize="words" placeholder="Your name">
+        <datalist id="collectorList"></datalist>
       </div>
     </div>
   </section>
@@ -58,15 +69,30 @@
   <section class="card mod" data-module="m1">
     <h2><span class="modno">Module 1</span> Preoperative baseline</h2>
 
+    <div class="field">
+      <label for="hospitalNo">Hospital number</label>
+      <input id="hospitalNo" type="text" autocomplete="off" spellcheck="false"
+             placeholder="as written on the chart">
+      <p class="note">Recorded here and nowhere else — it is what lets a query be traced back to
+        the patient record, so it never travels into Modules 2–5.</p>
+    </div>
+
     <div class="grid2">
       <div class="field">
-        <label for="ageMonths">Age <em>(months)</em></label>
-        <input id="ageMonths" type="number" inputmode="numeric" min="0" max="216" placeholder="e.g. 62">
+        <label for="dob">Date of birth</label>
+        <input id="dob" type="date">
+        <p class="note" id="dobNote">Works out the age. Stays on this phone — it is never saved or sent.</p>
       </div>
       <div class="field">
-        <span class="lbl">Sex</span>
-        <div class="opts" id="sex"></div>
+        <label for="ageMonths">Age <em>(completed months)</em></label>
+        <input id="ageMonths" type="number" inputmode="numeric" min="0" max="216" placeholder="e.g. 62">
+        <p class="note" id="ageNote">Type it here if the birth date is not known.</p>
       </div>
+    </div>
+
+    <div class="field">
+      <span class="lbl">Sex</span>
+      <div class="opts" id="sex"></div>
     </div>
     <p class="note info" id="toolNote" hidden></p>
 
@@ -95,15 +121,24 @@
       <div class="opts yn" id="chronicPain"></div>
     </div>
 
-    <div class="grid2">
-      <div class="field">
-        <label for="mypas">Child m-YPAS-SF <em>(/100)</em></label>
-        <input id="mypas" type="number" inputmode="numeric" min="23" max="100">
+    <div class="field">
+      <span class="lbl">Child m-YPAS-SF <em>(preoperative anxiety)</em></span>
+      <p class="explain">Pick the line that fits the child best in each of the four domains. The score works itself out.</p>
+      <div id="mypasItems"></div>
+      <div class="total" id="mypasTotal"><span>m-YPAS-SF</span><span>— / 100</span></div>
+      <p class="note" id="mypasNote"></p>
+    </div>
+
+    <div class="field">
+      <label for="caregiverVas">Caregiver anxiety VAS <em>(/100)</em></label>
+      <p class="explain">Hand the phone over: the caregiver slides to where their anxiety sits right now.</p>
+      <div class="vas">
+        <input id="caregiverVas" class="unset" type="range" min="0" max="100" step="1" value="50">
+        <div class="vas-ends"><span>Not anxious<br>at all</span><span>Most anxious<br>imaginable</span></div>
       </div>
-      <div class="field">
-        <label for="caregiverVas">Caregiver anxiety VAS <em>(/100)</em></label>
-        <input id="caregiverVas" type="number" inputmode="numeric" min="0" max="100">
-      </div>
+      <div class="total"><span>Caregiver anxiety</span><span id="vasValue">Not yet marked</span></div>
+      <p class="note" id="vasBlindNote">The number stays hidden so the caregiver marks the line, not a score.</p>
+      <button class="linkish" id="vasReveal" type="button" hidden>show the score</button>
     </div>
 
     <button class="save" data-save="m1">Save Module 1</button>

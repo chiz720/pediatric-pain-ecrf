@@ -117,7 +117,7 @@ No dependencies and no install step. Node 20+.
 - Age boundaries in tests are deliberately one day either side of a birthday.
   If you change `routing` params, those tests should fail — that is the point.
 - **`config.js` is the only file that changes between camps** — endpoint URL,
-  camp key, site, and the list of collector names. Nothing is typed on a phone:
+  camp key, the three centres, and the list of collector names. Nothing is typed on a phone:
   a collector taps their name once and never sees a setting. `campKey` in
   `config.js` must match `CAMP_KEY` in `Code.gs`.
 - The camp key is visible in page source by design. It stops drive-by writes to
@@ -152,6 +152,23 @@ modules at different hours, so no module waits on another.
 | 3 PACU emergence (PAED ×3) | `03_paed` | recovery |
 | 4 Ward pain (×5 timepoints) | `04_ward_pain` | ward, over 48 h |
 | 5 Regional offset & recovery | `05_recovery` | before discharge |
+
+**Three centres enrol at once: Chuka, Meru and Guardian.** The two-letter code
+is the middle of every study number — `PPP-CH-0031-1` — and a collector taps
+their centre once on their phone. The serial itself comes from that centre's
+**paper enrolment log**, not from the app: the study is paper-first, so the
+number has to be in ink on the form before any phone sees the child, and a
+physical log is the one allocator three simultaneous centres cannot make
+collide. The app supplies the prefix and computes the mod-11 check character,
+so only four digits are typed. It warns — never blocks — when a serial already
+has a baseline row, checking this phone first and the endpoint second
+(`mode=check`, which answers one boolean and reads nothing out).
+
+**The hospital number is a direct identifier and lives in Module 1 only.** It is
+what lets a query be traced back to a patient record, which is exactly why it
+never travels into Modules 2–5 or the analysis extract. It is declared in
+`privacy.identifierFields`, so `tests/schema.test.js` fails the build if a
+second form declares it.
 
 **Age is recorded in completed MONTHS, not a date of birth.** This came from
 the clinical form and it is a genuine improvement: months are not a direct

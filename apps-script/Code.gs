@@ -29,7 +29,7 @@
     'client_ts', 'server_ts', 'schema_version', 'app_version', 'params_version', 'training',
   ];
 
-  var NEVER_RETURN = ['date_of_birth'];
+  var NEVER_RETURN = ['date_of_birth', 'hospital_number'];
 
   function doPost(e) {
     var lock = LockService.getScriptLock();
@@ -103,6 +103,15 @@
         serverTs: new Date().toISOString(),
         schemaVersion: SCHEMA_VERSION,
       });
+    }
+    // Enrolment check. Three centres enrol at the same time off one paper log
+    // each, so the one thing worth asking the workbook is whether a serial has
+    // already been used. It answers a single boolean about a number the caller
+    // supplied, which is the most a GET on this workbook is ever allowed to do.
+    if (mode === 'check') {
+      var p = e.parameter || {};
+      if (!tokenValid(p.token)) return json({ ok: false, error: 'unauthorised' });
+      return json({ ok: true, enrolled: hasBaseline(p.sn) });
     }
     // A POST diverted here by a cached redirect lands with no mode. Say so
     // explicitly rather than returning something a client could mistake for an
@@ -221,6 +230,29 @@
     var values = sheet.getRange(2, col, sheet.getLastRow() - 1, 1).getValues();
     for (var i = 0; i < values.length; i++) {
       if (values[i][0] === uuid) return true;
+    }
+    return false;
+  }
+
+  /* ---------------- enrolment check ---------------- */
+
+  /**
+  * True when 01_baseline already holds a row for this study number.
+  *
+  * Reads one column and returns nothing from it — no row, no field, no
+  * clinical value, and never the hospital number that sits in that tab.
+  */
+  function hasBaseline(studyNumber) {
+    if (!studyNumber) return false;
+    var sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('01_baseline');
+    if (!sheet || sheet.getLastRow() < 2) return false;
+    var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    var col = headers.indexOf('study_number') + 1;
+    if (col === 0) return false;
+    var wanted = String(studyNumber).toUpperCase();
+    var values = sheet.getRange(2, col, sheet.getLastRow() - 1, 1).getValues();
+    for (var i = 0; i < values.length; i++) {
+      if (String(values[i][0]).toUpperCase() === wanted) return true;
     }
     return false;
   }

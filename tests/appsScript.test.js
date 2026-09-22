@@ -255,15 +255,64 @@ test('every request is logged with its sync latency', () => {
 
 /* ---------------- surface area ---------------- */
 
-test('the endpoint does exactly two things: accept writes and report health', () => {
+test('the endpoint does three things: accept writes, report health, answer "is this serial used?"', () => {
   // No roster, no read-back of study data. The form is one document per child,
   // so nothing needs to fetch a list — and an endpoint that cannot read out
-  // cannot leak on a GET.
+  // cannot leak on a GET. The enrolment check is the one exception and it
+  // returns a boolean about a number the caller already holds.
   const { sandbox } = loadEndpoint();
   assert.equal(typeof sandbox.roster, 'undefined');
   assert.equal(typeof sandbox.cachedRoster, 'undefined');
   assert.equal(get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN' }).error, 'unknown_mode');
   assert.equal(get(sandbox, { mode: 'anything', token: 'CAMP-2026-KN' }).error, 'unknown_mode');
+  assert.deepEqual(
+    Object.keys(get(sandbox, { mode: 'check', token: 'CAMP-2026-KN', sn: 'PPP-CH-0031-1' })).sort(),
+    ['enrolled', 'ok'],
+  );
+});
+
+/* ---------------- three centres, one serial each ---------------- */
+
+const baseline = (uuid, studyNumber, data = {}) => ({
+  uuid, form: '01_baseline', studyNumber,
+  clientTs: '2026-09-22T08:00:00Z', training: false,
+  data: { centre: studyNumber.slice(4, 6), hospital_number: 'MRN-88213', age_months: 62, ...data },
+});
+
+test('a serial already enrolled is reported as used, so two centres cannot share a child', () => {
+  const { sandbox } = loadEndpoint();
+  post(sandbox, envelope([baseline('u1', 'PPP-CH-0031-1')]));
+
+  assert.equal(get(sandbox, { mode: 'check', token: 'CAMP-2026-KN', sn: 'PPP-CH-0031-1' }).enrolled, true);
+  // Same digits, different centre: a different child, and must not collide.
+  assert.equal(get(sandbox, { mode: 'check', token: 'CAMP-2026-KN', sn: 'PPP-ME-0031-5' }).enrolled, false);
+  assert.equal(get(sandbox, { mode: 'check', token: 'CAMP-2026-KN', sn: 'PPP-GU-0031-X' }).enrolled, false);
+});
+
+test('an unused serial, an unknown sheet and a missing number all answer false rather than erroring', () => {
+  const { sandbox } = loadEndpoint();
+  // Nothing written yet — the tab does not even exist.
+  assert.equal(get(sandbox, { mode: 'check', token: 'CAMP-2026-KN', sn: 'PPP-CH-0001-X' }).enrolled, false);
+  assert.equal(get(sandbox, { mode: 'check', token: 'CAMP-2026-KN' }).enrolled, false);
+});
+
+test('the enrolment check needs the camp key', () => {
+  const { sandbox } = loadEndpoint();
+  post(sandbox, envelope([baseline('u1', 'PPP-CH-0031-1')]));
+  const res = get(sandbox, { mode: 'check', token: 'WRONG', sn: 'PPP-CH-0031-1' });
+  assert.equal(res.ok, false);
+  assert.equal(res.error, 'unauthorised');
+  assert.equal(res.enrolled, undefined);
+});
+
+test('the enrolment check never returns the hospital number sitting in the same row', () => {
+  // The baseline tab is the one place a direct identifier lives. The check
+  // reads its study_number column and returns a boolean — nothing else.
+  const { sandbox } = loadEndpoint();
+  post(sandbox, envelope([baseline('u1', 'PPP-CH-0031-1', { hospital_number: 'MRN-88213' })]));
+  const body = JSON.stringify(get(sandbox, { mode: 'check', token: 'CAMP-2026-KN', sn: 'PPP-CH-0031-1' }));
+  assert.ok(!body.includes('MRN-88213'), 'the hospital number leaked through the enrolment check');
+  assert.ok(!body.includes('PPP-'), 'the enrolment check echoed a study number');
 });
 
 test('a GET cannot read back anything that was written', () => {

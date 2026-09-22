@@ -203,6 +203,73 @@ input.bad { border-color: var(--severe); }
 .item-scale button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .item-scale button.on b { color: #fff; }
 
+/* Study serial: only the four digits are typed. The centre prefix comes from
+   the phone's centre, the check character is worked out — so the two parts
+   that are easiest to get wrong are the two parts nobody enters. */
+.serial { display: flex; align-items: stretch; gap: 0; }
+.serial .serial-fix {
+  display: flex; align-items: center; padding: 0 10px;
+  font-family: ui-monospace, monospace; font-size: 1.05rem;
+  color: var(--ink-3); background: var(--surface-2);
+  border: 1px solid var(--rule);
+}
+.serial .serial-fix:first-child { border-radius: 9px 0 0 9px; border-right: none; }
+.serial .serial-fix:last-child { border-radius: 0 9px 9px 0; border-left: none; }
+.serial input {
+  flex: 1; min-width: 0; border-radius: 0 !important;
+  text-align: center; letter-spacing: 0.22em; font-size: 1.05rem;
+}
+
+/* Visual analogue scale: a line that gets marked, not a number anyone types.
+   The thumb stays invisible until the scale is touched, because a slider parked
+   at its midpoint is an answer nobody gave. */
+/* Full bleed to the card edge: a VAS is a line of a stated length, and every
+   millimetre of it is resolution the caregiver can use. */
+.vas { margin: 2px -10px 0; }
+.vas input[type="range"] {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 52px; background: none; cursor: pointer;
+}
+.vas input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--rule);
+}
+.vas input[type="range"]::-moz-range-track {
+  height: 8px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--rule);
+}
+.vas input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; margin-top: -12px;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--surface);
+}
+.vas input[type="range"]::-moz-range-thumb {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: var(--accent); border: 2px solid var(--surface);
+}
+.vas input.unset::-webkit-slider-thumb { opacity: 0; }
+.vas input.unset::-moz-range-thumb { opacity: 0; }
+.vas-ends {
+  display: flex; justify-content: space-between; gap: 12px;
+  margin: -6px 10px 0; font-size: 0.74rem; line-height: 1.25; color: var(--ink-3);
+}
+.vas-ends span:last-child { text-align: right; }
+#vasReveal { margin-top: 2px; font-size: 0.8rem; }
+
+/* Ordinal pick list: one tappable line per level, for scales whose anchors are
+   sentences rather than words (m-YPAS-SF). Too long to sit in .item-scale. */
+.levels { display: flex; flex-direction: column; gap: 6px; }
+.levels button {
+  min-height: 46px; padding: 9px 12px; text-align: left;
+  font: inherit; font-size: 0.86rem; cursor: pointer;
+  border: 1px solid var(--rule); border-radius: 9px;
+  background: var(--surface); color: var(--ink-2);
+  display: flex; align-items: center; gap: 10px;
+}
+.levels button b {
+  flex: none; width: 1.1em; font-family: ui-monospace, monospace; color: var(--ink-3);
+}
+.levels button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
+.levels button.on b { color: #fff; }
+
 .total {
   display: flex; justify-content: space-between; align-items: baseline;
   margin-top: 14px; padding: 12px 14px; border-radius: 9px; background: var(--accent-soft);

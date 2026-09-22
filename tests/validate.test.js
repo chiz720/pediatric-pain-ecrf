@@ -1,4 +1,5 @@
 import './_setup.js';
+import { format as formatStudyNumber } from '../lib/studyNumber.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -61,6 +62,23 @@ test('study number: a transposed sequence fails the check character', () => {
   assert.deepEqual(codes(validateStudyNumberField('PPP-KN-0174-0')), ['check_character']);
   assert.deepEqual(codes(validateStudyNumberField('KN-0147-0')), ['format']);
   assert.deepEqual(codes(validateStudyNumberField('')), ['format']);
+});
+
+test('the three centres each get their own serial space, and a transposition still fails', () => {
+  // CH, ME and GU enrol at the same time from separate paper logs. The same
+  // four digits at two centres are two different children, and each number
+  // carries its own check character — so a Meru number typed on a Chuka phone
+  // does not quietly validate.
+  const numbers = ['CH', 'ME', 'GU'].map((code) => formatStudyNumber(code, 31));
+  assert.deepEqual(numbers, ['PPP-CH-0031-1', 'PPP-ME-0031-5', 'PPP-GU-0031-X']);
+  assert.equal(new Set(numbers).size, 3);
+
+  for (const n of numbers) assert.deepEqual(codes(validateStudyNumberField(n)), []);
+
+  // The centre's letters are inside the checksum, so swapping them breaks it.
+  assert.deepEqual(codes(validateStudyNumberField('PPP-ME-0031-1')), ['check_character']);
+  // And a transposition inside the four typed digits is what it is there for.
+  assert.deepEqual(codes(validateStudyNumberField('PPP-CH-0013-1')), ['check_character']);
 });
 
 test('theatre timestamps must run forwards and cannot be in the future', () => {
