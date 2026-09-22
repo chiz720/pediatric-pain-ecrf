@@ -14,12 +14,12 @@ import { CONFIG } from './config.js';
 import { loadParams, params } from './lib/params.js';
 import { selectInstrument, monthsLabel, TOOLS } from './lib/routing.js';
 import { ageMonths, ageLabel, isFuture } from './lib/age.js';
-import { flaccTotal, paedTotal, mypasSfScore, bmi, localAnaestheticDose } from './lib/scoring.js';
+import { flaccTotal, paedTotal, mypasSfScore, bmi, localAnaestheticDose, doseMme, resolveMmeKey } from './lib/scoring.js';
 import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/clock.js';
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.22p-crf';
+const APP_VERSION = '2026.09.22t-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -332,6 +332,7 @@ function buildModule1() {
     } catch { F.m1.bmi = null; $('bmi').textContent = '—'; }
     updateOmePerKg();
     updateLaDose();
+    totalOpioids();        // the per-kg morphine equivalent moves with the weight
   };
   $('weight').addEventListener('input', recalcBmi);
   $('height').addEventListener('input', recalcBmi);
@@ -535,16 +536,21 @@ function buildModule2() {
   optionRow('laterality', o.laterality, (v) => { F.m2.laterality = v; });
   optionRow('approach', o.approach, (v) => { F.m2.approach = v; });
   buildAnaesthesia(o);
+  buildOpioids();
   optionRow('guidance', o.guidance, (v) => { F.m2.guidance = v; });
   optionRow('laDrug', o.localAnaestheticDrugs, (v) => { F.m2.la_drug = v; updateLaDose(); });
 
-  optionRow('block', o.block, (v) => {
-    F.m2.block = v;
-    $('blockDetail').hidden = (v === 'None');
+  // The block is named, not chosen from a list: "caudal + ilioinguinal" and
+  // "left rectus sheath" are both real entries on the theatre form, and a
+  // fixed list would force one of them into "PNB". An empty box means no
+  // block, which is why the dose fields appear only once something is typed.
+  $('blockName').addEventListener('input', () => {
+    F.m2.block = $('blockName').value.trim() || null;
+    $('blockDetail').hidden = !F.m2.block;
     updateLaDose();
   });
 
-  ['incision', 'fentanyl', 'paracetamol', 'ketorolac', 'dexamethasone', 'ketamine']
+  ['incision', 'paracetamol', 'ketorolac', 'dexamethasone', 'ketamine']
     .forEach((id) => $(id).addEventListener('input', () => { F.m2[snake(id)] = num(id); }));
 
   ['anaesStart', 'anaesEnd', 'surgStart', 'surgEnd']
@@ -562,23 +568,54 @@ const snake = (s) => s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
  * far more often a decimal slip than a real overdose, and catching it before
  * the block is given is the whole point.
  */
+/**
+ * Per cent, millilitres and a weight give the dose per kilogram.
+ *
+ * Stated per kilogram first, for the same reason as the opioid total: 15 mg of
+ * bupivacaine is routine in a teenager and an overdose in an infant. The
+ * ceiling check is the one place this app refuses a save outright, because an
+ * entry over the maximum is far more often a decimal slip in the form than a
+ * dose anyone actually gave.
+ */
 function updateLaDose() {
   const note = $('laNote');
+  const value = $('laTotal').lastChild;
   const { la_drug: drug, la_conc: conc, la_vol: vol } = F.m2;
   const weight = F.m1.weight_kg;
-  if (!drug || !conc || !vol || !weight) { note.textContent = ''; note.className = 'note'; F.m2.la_mg_per_kg = null; return; }
+
+  F.m2.la_mg = null;
+  F.m2.la_mg_per_kg = null;
+  F.m2.la_pct_of_max = null;
+  F.m2.la_verdict = null;
+  value.replaceChildren('—');
+
+  if (!drug || !conc || !vol) {
+    note.className = 'note';
+    note.textContent = 'Agent, per cent and volume give the dose per kilogram.';
+    return;
+  }
+  if (!weight) {
+    note.className = 'note warn';
+    note.textContent = 'Enter the weight in Module 1 — the ceiling is per kilogram, so without it the dose cannot be checked.';
+    return;
+  }
+
   try {
     const d = localAnaestheticDose({
       agent: drug.toLowerCase(), concentrationPct: conc, volumeMl: vol, weightKg: weight,
     });
+    F.m2.la_mg = d.mg;
     F.m2.la_mg_per_kg = d.mgPerKg;
     F.m2.la_pct_of_max = d.pctOfMax;
-    note.textContent = d.verdict === 'block'
-      ? `${d.mgPerKg} mg/kg — over the ${d.maxMgPerKg} mg/kg maximum. Check the volume and concentration.`
-      : `${d.mgPerKg} mg/kg · ${d.pctOfMax}% of maximum`;
+    F.m2.la_verdict = d.verdict;
+
+    value.replaceChildren(`${d.mgPerKg} mg/kg`,
+      el('span', { class: 'sub', text: `${d.mg} mg total · ${d.pctOfMax}% of maximum` }));
+    note.textContent = d.message || `${d.pctOfMax}% of the ${d.maxMgPerKg} mg/kg maximum.`;
     note.className = `note ${d.verdict === 'block' ? 'bad' : d.verdict === 'warn' ? 'warn' : 'ok'}`;
-  } catch {
-    note.textContent = ''; note.className = 'note';
+  } catch (err) {
+    note.className = 'note bad';
+    note.textContent = String(err.message || err);
   }
 }
 
@@ -656,6 +693,128 @@ function clearAgent() {
   $('agent').replaceChildren();
   $('agentField').hidden = true;
   $('doseField').hidden = true;
+}
+
+/**
+ * Intraoperative opioids, one dose at a time.
+ *
+ * A single "total fentanyl" box asks theatre to do arithmetic mid-case and
+ * throws away when each dose was given. Every administration goes in on its
+ * own line instead, and the per-drug totals and the cumulative morphine
+ * equivalent fall out of the log.
+ *
+ * Conversion is route-aware and unit-strict — fentanyl is per mcg, the rest
+ * per mg — and a drug with no declared IV factor is deliberately NOT converted
+ * to zero. It is totalled in its own units and named as excluded, because a
+ * silent zero would understate the opioid load of every child who got it.
+ */
+const ROUTE = 'IV';           // theatre opioids are given intravenously
+const opioidLog = [];
+
+function buildOpioids() {
+  const agents = params().opioids.intraoperative.agents;
+  let picked = null;
+
+  optionRow('opioidDrug', agents.map((a) => ({ label: a.name, value: a.name })), (name) => {
+    picked = agents.find((a) => a.name === name) || null;
+    $('opioidUnit').textContent = picked ? `(${picked.unit})` : '';
+    $('opioidDoseField').hidden = !picked;
+    $('opioidDose').focus();
+  });
+
+  $('addDose').addEventListener('click', () => {
+    const amount = num('opioidDose');
+    if (!picked) { toast('Pick the drug first'); return; }
+    if (amount == null || !(amount > 0)) { toast('Type the dose that was given'); return; }
+    opioidLog.push({ drug: picked.name, amount, unit: picked.unit });
+    $('opioidDose').value = '';
+    drawDoses();
+  });
+
+  drawDoses();
+}
+
+function drawDoses() {
+  const list = $('doseList');
+  list.replaceChildren();
+  opioidLog.forEach((d, i) => {
+    list.append(el('li', {},
+      el('span', { text: `${d.drug} ${d.amount} ${d.unit}` }),
+      el('button', {
+        type: 'button', class: 'linkish', text: 'remove',
+        onclick: () => { opioidLog.splice(i, 1); drawDoses(); },
+      })));
+  });
+  totalOpioids();
+}
+
+function totalOpioids() {
+  const agents = params().opioids.intraoperative.agents;
+  const perDrug = new Map();
+  const unconverted = new Set();
+  let mme = 0;
+
+  for (const d of opioidLog) {
+    perDrug.set(d.drug, (perDrug.get(d.drug) || 0) + d.amount);
+    if (resolveMmeKey(d.drug, ROUTE)) {
+      mme += doseMme({ drug: d.drug, route: ROUTE, amount: d.amount, unit: d.unit });
+    } else {
+      unconverted.add(d.drug);
+    }
+  }
+
+  // Rebuild every per-drug column so a removed dose cannot leave a stale total.
+  agents.forEach((a) => { delete F.m2[`opioid_${a.name.toLowerCase()}_${a.unit}`]; });
+  for (const [drug, amount] of perDrug) {
+    const agent = agents.find((a) => a.name === drug);
+    F.m2[`opioid_${drug.toLowerCase()}_${agent.unit}`] = Math.round(amount * 1000) / 1000;
+  }
+
+  const given = [...perDrug].map(([drug, amount]) =>
+    `${drug} ${Math.round(amount * 1000) / 1000} ${agents.find((a) => a.name === drug).unit}`);
+
+  F.m2.opioid_doses = opioidLog.map((d) => `${d.drug} ${d.amount} ${d.unit}`).join('; ') || null;
+  F.m2.opioid_dose_count = opioidLog.length;
+  F.m2.opioid_route = opioidLog.length ? ROUTE : null;
+  F.m2.opioid_mme_mg = opioidLog.length ? Math.round(mme * 1000) / 1000 : null;
+  F.m2.opioid_mme_excluded = unconverted.size ? [...unconverted].join('; ') : null;
+
+  const weight = F.m1.weight_kg;
+  F.m2.opioid_mme_per_kg = (F.m2.opioid_mme_mg != null && weight)
+    ? Math.round((F.m2.opioid_mme_mg / weight) * 1000) / 1000
+    : null;
+
+  $('opioidGiven').lastChild.textContent = given.length ? given.join(' · ') : 'nothing yet';
+
+  // Per kilogram is the headline, because 12 mg of morphine equivalent means
+  // one thing in a 6 kg infant and another in a 40 kg teenager, and the
+  // comparison across children is the whole point of recording it. The
+  // absolute figure stays visible underneath — it is what the chart says, and
+  // it is what the per-kg number is recomputed from.
+  const value = $('opioidMme').lastChild;
+  value.replaceChildren();
+  if (!opioidLog.length) {
+    value.append('—');
+  } else if (F.m2.opioid_mme_per_kg != null) {
+    value.append(`${F.m2.opioid_mme_per_kg} mg/kg`,
+      el('span', { class: 'sub', text: `${F.m2.opioid_mme_mg} mg total` }));
+  } else {
+    value.append('— mg/kg',
+      el('span', { class: 'sub', text: `${F.m2.opioid_mme_mg} mg total` }));
+  }
+
+  const note = $('opioidNote');
+  const needsWeight = opioidLog.length && F.m2.opioid_mme_mg != null && F.m2.opioid_mme_per_kg == null;
+  if (unconverted.size) {
+    note.className = 'note warn';
+    note.textContent = `${[...unconverted].join(' and ')} has no published IV conversion in params, so it is recorded and totalled but left out of the morphine equivalent.`;
+  } else if (needsWeight) {
+    note.className = 'note warn';
+    note.textContent = 'Enter the weight in Module 1 — without it the dose cannot be expressed per kilogram, which is the figure that compares between children.';
+  } else {
+    note.className = 'note';
+    note.textContent = 'Add each dose as it is given. The totals and the morphine equivalent work themselves out.';
+  }
 }
 
 /**
@@ -1002,6 +1161,14 @@ async function saveModule(mod) {
     return;
   }
 
+  // The single hard block in the app, and it is clinical: a local anaesthetic
+  // over the weight-adjusted ceiling is nearly always a decimal slip in the
+  // form rather than a dose that was given. Everything else clinical warns.
+  if (mod === 'm2' && F.m2.la_verdict === 'block') {
+    toast('Local anaesthetic is over the maximum — check the % and the volume');
+    $('laConc').focus();
+    return;
+  }
   if (mod === 'm2' && F.m2.domain && !F.m2.procedure_name) {
     toast('Name the operation, not just the domain');
     $('procedure').focus();

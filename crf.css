@@ -277,16 +277,33 @@ input.bad { border-color: var(--severe); }
 .levels button.on { background: var(--accent); border-color: var(--accent); color: #fff; }
 .levels button.on b { color: #fff; }
 
+/* The running dose log. Each line is one administration, removable, because
+   a dose typed twice is commoner than a dose given twice. */
+.doses { list-style: none; margin: 0 0 10px; padding: 0; }
+.doses li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 12px; margin-bottom: 6px;
+  border: 1px solid var(--rule); border-radius: 9px; background: var(--surface-2);
+}
+.doses li span { font-family: ui-monospace, monospace; font-size: 0.9rem; color: var(--ink); }
+.doses li .muted { font-family: inherit; font-size: 0.78rem; color: var(--ink-3); }
+
 .total {
   display: flex; justify-content: space-between; align-items: baseline;
   margin-top: 14px; padding: 12px 14px; border-radius: 9px; background: var(--accent-soft);
 }
-.total span:first-child {
+.total > span:first-child {
   font-size: 0.74rem; font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--accent-ink);
 }
-.total span:last-child {
+.total > span:last-child {
   font-family: ui-monospace, monospace; font-size: 1.35rem; font-weight: 700; color: var(--accent-ink);
+  text-align: right;
+}
+/* The absolute figure, kept visible but subordinate to the per-kilogram one. */
+.total .sub {
+  display: block; margin-top: 2px;
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.03em; opacity: 0.75;
 }
 
 /* ---------- save ---------- */

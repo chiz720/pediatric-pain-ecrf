@@ -1,4 +1,5 @@
 import './_setup.js';
+import { PARAMS } from './_setup.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
@@ -190,4 +191,41 @@ test('codeine and tramadol flag by age but never block', () => {
   assert.equal(postTonsil.restricted, true);
 
   assert.equal(restrictedForAge({ drug: 'Morphine', route: 'IV', dateOfBirth: '2018-01-01', at }).restricted, false);
+});
+
+test('every theatre opioid declares the unit its MME factor expects', () => {
+  // doseMme throws on a unit mismatch rather than converting, which is correct
+  // and also means a form offering fentanyl in mg would fail at the bedside
+  // rather than in review. The agent list and the factor table must agree.
+  const { agents } = PARAMS.opioids.intraoperative;
+  for (const agent of agents) {
+    const key = resolveMmeKey(agent.name, 'IV');
+    if (!key) continue;
+    const spec = PARAMS.opioids.mme.factors[key];
+    assert.equal(agent.unit, spec.unit,
+      `${agent.name} is offered in ${agent.unit} but ${key} converts from ${spec.unit}`);
+  }
+});
+
+test('a theatre opioid with no IV factor converts to nothing, not to zero', () => {
+  // Pethidine has no entry in the route map, so resolveMmeKey returns null and
+  // the form excludes it by name. doseMme would answer 0, and 0 mg of morphine
+  // equivalent for a child who got pethidine is a wrong number, not a missing
+  // one — this test pins which drugs are in that state.
+  const withoutFactor = PARAMS.opioids.intraoperative.agents
+    .filter((a) => !resolveMmeKey(a.name, 'IV'))
+    .map((a) => a.name);
+  assert.deepEqual(withoutFactor, ['Pethidine']);
+  assert.equal(doseMme({ drug: 'Pethidine', route: 'IV', amount: 25, unit: 'mg' }), 0);
+});
+
+test('the cumulative morphine equivalent of a real theatre log', () => {
+  // Fentanyl 20 mcg + 10 mcg at 0.3, morphine 1 mg IV at 3.
+  const log = [
+    { drug: 'Fentanyl', route: 'IV', amount: 20, unit: 'mcg' },
+    { drug: 'Fentanyl', route: 'IV', amount: 10, unit: 'mcg' },
+    { drug: 'Morphine', route: 'IV', amount: 1, unit: 'mg' },
+  ];
+  const total = log.reduce((sum, d) => sum + doseMme(d), 0);
+  assert.equal(Math.round(total * 1000) / 1000, 12);
 });

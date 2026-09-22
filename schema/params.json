@@ -168,7 +168,17 @@
         }
       }
     },
-    "fentanylEquivalents": {
+    "intraoperative": {
+    "_note": "The opioids given in theatre on this camp list, and the unit each is drawn up in. Conversion to morphine equivalents goes through opioids.mme.factors by way of the drug/route map in lib/scoring.js. An agent with no IV factor there is recorded and totalled in its own units but left out of the cumulative morphine equivalent, and the form says which — a silent zero would understate the opioid load of every child who got it.",
+    "agents": [
+      { "name": "Fentanyl", "unit": "mcg" },
+      { "name": "Morphine", "unit": "mg" },
+      { "name": "Pethidine", "unit": "mg" },
+      { "name": "Tramadol", "unit": "mg" }
+    ]
+  },
+
+  "fentanylEquivalents": {
       "_note": "Intraoperative opioid load, expressed as mcg fentanyl equivalents.",
       "factors": {
         "fentanyl": {
@@ -413,10 +423,8 @@
       "Landmark"
     ],
     "localAnaestheticDrugs": [
-      "Bupivacaine",
-      "Levobupivacaine",
-      "Ropivacaine",
-      "Lidocaine"
+      "Lidocaine",
+      "Bupivacaine"
     ],
     "consent": [
       "Parental consent signed",
