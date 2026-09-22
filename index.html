@@ -241,6 +241,8 @@
       <p class="note" id="doseNote"></p>
     </div>
 
+    <div class="total" id="sedTotal" hidden><span>Sedative</span><span>—</span></div>
+
     <h3>Intraoperative opioids</h3>
     <div class="field">
       <span class="lbl">Drug</span>
@@ -288,27 +290,36 @@
       </div>
       <div class="total" id="laTotal"><span>Local anaesthetic</span><span>—</span></div>
       <p class="note" id="laNote"></p>
+
+      <div class="field">
+        <span class="lbl">Adjuvants</span>
+        <div class="opts" id="adjAgent"></div>
+      </div>
+      <div class="field" id="adjDoseField" hidden>
+        <label for="adjDose">Dose <em id="adjUnit"></em></label>
+        <input id="adjDose" type="number" inputmode="decimal" step="0.1" min="0" max="500">
+        <button class="secondary" id="addAdj" type="button">Add this adjuvant</button>
+      </div>
+      <ul class="doses" id="adjList"></ul>
+      <p class="note" id="adjNote"></p>
     </div>
 
     <h3>Multimodal non-opioids</h3>
-    <div class="grid2">
-      <div class="field">
-        <label for="paracetamol">IV paracetamol <em>(mg)</em></label>
-        <input id="paracetamol" type="number" inputmode="decimal" step="1" min="0" max="2000">
-      </div>
-      <div class="field">
-        <label for="ketorolac">IV ketorolac <em>(mg)</em></label>
-        <input id="ketorolac" type="number" inputmode="decimal" step="0.5" min="0" max="60">
-      </div>
-      <div class="field">
-        <label for="dexamethasone">IV dexamethasone <em>(mg)</em></label>
-        <input id="dexamethasone" type="number" inputmode="decimal" step="0.1" min="0" max="20">
-      </div>
-      <div class="field">
-        <label for="ketamine">IV ketamine <em>(mg)</em></label>
-        <input id="ketamine" type="number" inputmode="decimal" step="0.5" min="0" max="100">
-      </div>
+    <div class="field">
+      <span class="lbl">Drug</span>
+      <div class="opts" id="noDrug"></div>
     </div>
+    <div class="field" id="noRouteField" hidden>
+      <span class="lbl">Route</span>
+      <div class="opts yn" id="noRoute"></div>
+    </div>
+    <div class="field" id="noDoseField" hidden>
+      <label for="noDose">Dose <em>(mg)</em></label>
+      <input id="noDose" type="number" inputmode="decimal" step="1" min="0" max="2000">
+      <button class="secondary" id="addNonOpioid" type="button">Add this dose</button>
+    </div>
+    <ul class="doses" id="noList"></ul>
+    <p class="note" id="noNote"></p>
 
     <button class="save" data-save="m2">Save Module 2</button>
   </section>

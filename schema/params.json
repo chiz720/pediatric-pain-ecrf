@@ -1,5 +1,5 @@
 {
-  "paramsVersion": "1.6.0",
+  "paramsVersion": "1.8.0",
   "lastReviewed": "2026-09-22",
   "countersignedBy": null,
   "countersignedOn": null,
@@ -85,6 +85,13 @@
   },
   "anaesthesia": {
     "_basis": "The unit each agent is charted in at the bedside. Volatiles are a fraction of MAC; a propofol infusion runs in mg/kg/hr, a ketamine one in mcg/kg/min and dexmedetomidine in mcg/kg/hr. Midazolam is given as a weight-based bolus rather than a rate, so it is charted in mg/kg. The unit travels with the number because a dose recorded without one is how a tenfold error survives into the analysis.",
+    "_sedationNote": "Sedation is recorded as the amount actually given, in mg or mcg, and the app works out the dose per kilogram. Maintenance of a general anaesthetic is a rate and is charted as one, which is why doseUnits and sedativeDoseUnits differ for the same drug.",
+    "sedativeDoseUnits": {
+      "Propofol": "mg",
+      "Ketamine": "mg",
+      "Midazolam": "mg",
+      "Dexmedetomidine": "mcg"
+    },
     "doseUnits": {
       "Sevoflurane": "% MAC",
       "Halothane": "% MAC",
@@ -94,6 +101,17 @@
       "Midazolam": "mg/kg",
       "Dexmedetomidine": "mcg/kg/hr"
     }
+  },
+
+  "nonOpioids": {
+    "_note": "Non-opioid analgesia given in theatre, with the route recorded because paracetamol and diclofenac go in either intravenously or rectally and the two are not interchangeable in onset or in dose. All are written in mg and expressed per kilogram, which is how they are prescribed in children.",
+    "routes": ["IV", "PR"],
+    "agents": [
+      { "name": "Paracetamol", "unit": "mg" },
+      { "name": "Diclofenac", "unit": "mg" },
+      { "name": "Ketorolac", "unit": "mg" },
+      { "name": "Ketamine", "unit": "mg" }
+    ]
   },
 
   "anxiolytic": {
@@ -112,6 +130,16 @@
     "infantReductionMaxMonths": 5,
     "infantReductionFactor": 0.7,
     "infantReductionNote": "Reduce by 30% under 6 completed months for immature hepatic clearance and low alpha-1-acid glycoprotein.",
+    "_adjuvantNote": "Block adjuvants and the unit each dose is written in. Each is expressed per kilogram in its own right — they are different drugs with different ceilings, so there is no combined figure. Adrenaline carries no dose here: it is recorded because it raises the lidocaine ceiling, which is the one thing this form blocks on.",
+    "adjuvants": [
+      { "name": "Dexmedetomidine", "unit": "mcg" },
+      { "name": "Clonidine", "unit": "mcg" },
+      { "name": "Fentanyl", "unit": "mcg" },
+      { "name": "Morphine", "unit": "mg" },
+      { "name": "Ketamine", "unit": "mg" },
+      { "name": "Dexamethasone", "unit": "mg" },
+      { "name": "Adrenaline", "unit": null }
+    ],
     "agents": {
       "bupivacaine": {
         "label": "Bupivacaine",

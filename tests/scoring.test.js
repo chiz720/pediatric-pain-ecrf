@@ -229,3 +229,39 @@ test('the cumulative morphine equivalent of a real theatre log', () => {
   const total = log.reduce((sum, d) => sum + doseMme(d), 0);
   assert.equal(Math.round(total * 1000) / 1000, 12);
 });
+
+test('every block adjuvant declares a dose unit, except the one with no dose', () => {
+  // Adrenaline is recorded for what it does to the ceiling, not for its dose,
+  // so it alone carries a null unit. Everything else must say mg or mcg —
+  // confusing those two is a thousandfold error in a caudal.
+  const { adjuvants } = PARAMS.localAnaesthetic;
+  const unitless = adjuvants.filter((a) => a.unit === null).map((a) => a.name);
+  assert.deepEqual(unitless, ['Adrenaline']);
+  for (const a of adjuvants.filter((x) => x.unit !== null)) {
+    assert.ok(['mg', 'mcg'].includes(a.unit), `${a.name} declares ${a.unit}`);
+  }
+});
+
+test('adrenaline raises the lidocaine ceiling and nothing else', () => {
+  // This is why adrenaline is recorded at all: it is the difference between a
+  // dose the form refuses and one it accepts.
+  const plain = localAnaestheticDose({
+    agent: 'lidocaine', concentrationPct: 1, volumeMl: 8, weightKg: 14,
+  });
+  const withEpi = localAnaestheticDose({
+    agent: 'lidocaine', concentrationPct: 1, volumeMl: 8, weightKg: 14, withEpinephrine: true,
+  });
+  assert.equal(plain.maxMgPerKg, 5);
+  assert.equal(withEpi.maxMgPerKg, 7);
+  assert.equal(plain.mgPerKg, withEpi.mgPerKg);
+  assert.ok(withEpi.pctOfMax < plain.pctOfMax);
+
+  // Bupivacaine has no adrenaline ceiling, so the flag must change nothing.
+  const bupi = localAnaestheticDose({
+    agent: 'bupivacaine', concentrationPct: 0.25, volumeMl: 8, weightKg: 14,
+  });
+  const bupiEpi = localAnaestheticDose({
+    agent: 'bupivacaine', concentrationPct: 0.25, volumeMl: 8, weightKg: 14, withEpinephrine: true,
+  });
+  assert.equal(bupi.maxMgPerKg, bupiEpi.maxMgPerKg);
+});

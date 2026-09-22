@@ -19,7 +19,7 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.22u-crf';
+const APP_VERSION = '2026.09.22z-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -334,6 +334,9 @@ function buildModule1() {
     updateLaDose();
     totalOpioids();        // the per-kg morphine equivalent moves with the weight
     updateAnxiolytic();    // and so does the premedication dose
+    updateSedativeDose();  // and the sedation dose
+    drawAdjuvants();       // and every block adjuvant
+    drawNonOpioids();      // and the non-opioids
   };
   $('weight').addEventListener('input', recalcBmi);
   $('height').addEventListener('input', recalcBmi);
@@ -623,8 +626,10 @@ function buildModule2() {
   optionRow('approach', o.approach, (v) => { F.m2.approach = v; });
   buildAnaesthesia(o);
   buildOpioids();
+  buildNonOpioids();
   optionRow('guidance', o.guidance, (v) => { F.m2.guidance = v; });
   optionRow('laDrug', o.localAnaestheticDrugs, (v) => { F.m2.la_drug = v; updateLaDose(); });
+  buildAdjuvants();
 
   // The block is named, not chosen from a list: "caudal + ilioinguinal" and
   // "left rectus sheath" are both real entries on the theatre form, and a
@@ -636,8 +641,7 @@ function buildModule2() {
     updateLaDose();
   });
 
-  ['incision', 'paracetamol', 'ketorolac', 'dexamethasone', 'ketamine']
-    .forEach((id) => $(id).addEventListener('input', () => { F.m2[snake(id)] = num(id); }));
+  $('incision').addEventListener('input', () => { F.m2.incision = num('incision'); });
 
   ['anaesStart', 'anaesEnd', 'surgStart', 'surgEnd']
     .forEach((id) => $(id).addEventListener('input', updateTimes));
@@ -654,6 +658,101 @@ const snake = (s) => s.replace(/[A-Z]/g, (c) => '_' + c.toLowerCase());
  * far more often a decimal slip than a real overdose, and catching it before
  * the block is given is the whole point.
  */
+/**
+ * Block adjuvants, each per kilogram in its own right.
+ *
+ * Caudals rarely go in as plain local: clonidine, dexmedetomidine or an opioid
+ * rides along, and each is dosed per kilogram against its own ceiling. There
+ * is deliberately no combined figure — adding mcg of clonidine to mg of
+ * morphine would produce a number that means nothing.
+ *
+ * Adrenaline is the exception and carries no dose. It is here because it
+ * raises the lidocaine ceiling from 5 to 7 mg/kg, and that ceiling is the one
+ * thing this form refuses a save over. Recording it as an adjuvant is what
+ * makes the refusal correct rather than merely cautious.
+ */
+const adjuvantLog = [];
+
+function buildAdjuvants() {
+  const adjuvants = params().localAnaesthetic.adjuvants;
+  let picked = null;
+
+  optionRow('adjAgent', adjuvants.map((a) => ({ label: a.name, value: a.name })), (name) => {
+    picked = adjuvants.find((a) => a.name === name) || null;
+    if (picked && picked.unit === null) {
+      // Adrenaline: no dose to ask for, so it goes straight into the log.
+      if (!adjuvantLog.some((d) => d.drug === picked.name)) {
+        adjuvantLog.push({ drug: picked.name, amount: null, unit: null });
+      }
+      $('adjDoseField').hidden = true;
+      drawAdjuvants();
+      return;
+    }
+    $('adjUnit').textContent = picked ? `(${picked.unit})` : '';
+    $('adjDose').value = '';
+    $('adjDoseField').hidden = !picked;
+  });
+
+  $('addAdj').addEventListener('click', () => {
+    const amount = num('adjDose');
+    if (!picked) { toast('Pick the adjuvant first'); return; }
+    if (amount == null || !(amount > 0)) { toast('Type the dose that was given'); return; }
+    adjuvantLog.push({ drug: picked.name, amount, unit: picked.unit });
+    $('adjDose').value = '';
+    drawAdjuvants();
+  });
+
+  drawAdjuvants();
+}
+
+function drawAdjuvants() {
+  const list = $('adjList');
+  const weight = F.m1.weight_kg;
+  list.replaceChildren();
+
+  adjuvantLog.forEach((d, i) => {
+    const perKg = (d.amount != null && weight)
+      ? `${Math.round((d.amount / weight) * 1000) / 1000} ${d.unit}/kg`
+      : null;
+    list.append(el('li', {},
+      el('span', { text: d.amount == null ? d.drug : `${d.drug} ${d.amount} ${d.unit}` }),
+      el('span', { class: 'muted', text: perKg || (d.amount == null ? 'raises the ceiling' : 'needs weight') }),
+      el('button', {
+        type: 'button', class: 'linkish', text: 'remove',
+        onclick: () => { adjuvantLog.splice(i, 1); drawAdjuvants(); },
+      })));
+  });
+
+  // Rebuild every adjuvant column so a removed line leaves nothing behind.
+  params().localAnaesthetic.adjuvants.forEach((a) => {
+    delete F.m2[`adjuvant_${a.name.toLowerCase()}_${a.unit || 'given'}`];
+    delete F.m2[`adjuvant_${a.name.toLowerCase()}_per_kg`];
+  });
+  for (const d of adjuvantLog) {
+    const key = d.drug.toLowerCase();
+    if (d.amount == null) { F.m2[`adjuvant_${key}_given`] = true; continue; }
+    F.m2[`adjuvant_${key}_${d.unit}`] = d.amount;
+    if (weight) F.m2[`adjuvant_${key}_per_kg`] = Math.round((d.amount / weight) * 1000) / 1000;
+  }
+  F.m2.adjuvants = adjuvantLog.length
+    ? adjuvantLog.map((d) => (d.amount == null ? d.drug : `${d.drug} ${d.amount} ${d.unit}`)).join('; ')
+    : null;
+
+  const note = $('adjNote');
+  if (!adjuvantLog.length) {
+    note.className = 'note';
+    note.textContent = 'Anything added to the solution. Each is worked out per kilogram on its own.';
+  } else if (!weight && adjuvantLog.some((d) => d.amount != null)) {
+    note.className = 'note warn';
+    note.textContent = 'Enter the weight in Module 1 to get these per kilogram.';
+  } else {
+    note.className = 'note ok';
+    note.textContent = F.m2.adjuvants;
+  }
+
+  updateLaDose();     // adrenaline moves the lidocaine ceiling
+}
+
 /**
  * Per cent, millilitres and a weight give the dose per kilogram.
  *
@@ -689,6 +788,7 @@ function updateLaDose() {
   try {
     const d = localAnaestheticDose({
       agent: drug.toLowerCase(), concentrationPct: conc, volumeMl: vol, weightKg: weight,
+      withEpinephrine: adjuvantLog.some((a) => a.drug === 'Adrenaline'),
     });
     F.m2.la_mg = d.mg;
     F.m2.la_mg_per_kg = d.mgPerKg;
@@ -738,27 +838,44 @@ function buildAnaesthesia(o) {
     // own list, because midazolam and dexmedetomidine sedate but neither
     // maintains a general anaesthetic on its own.
     $('maintRouteField').hidden = true;
-    showAgents('Sedative', o.sedativeAgent);
+    showAgents('Sedative', o.sedativeAgent, 'sedation');
   });
 
   optionRow('maintRoute', o.maintenanceRoute, (route) => {
     F.m2.maintenance_route = route;
     clearAgent();
     showAgents(route === 'TIVA' ? 'Infusion' : 'Volatile agent',
-      route === 'TIVA' ? o.infusionAgent : o.gasAgent);
+      route === 'TIVA' ? o.infusionAgent : o.gasAgent, 'maintenance');
   });
 
-  $('anaesDose').addEventListener('input', () => { F.m2.anaes_dose = num('anaesDose'); });
+  $('anaesDose').addEventListener('input', () => {
+    F.m2.anaes_dose = num('anaesDose');
+    updateSedativeDose();
+  });
 }
 
-function showAgents(label, list) {
+function showAgents(label, list, mode) {
+  doseMode = mode;
   $('agentLabel').textContent = label;
   $('agentField').hidden = false;
   optionRow('agent', list, pickAgent);
 }
 
+/**
+ * Maintenance is charted as a rate; sedation is charted as an amount.
+ *
+ * A propofol infusion runs at mg/kg/hr and is already per kilogram, so there
+ * is nothing to work out. A sedation dose is written on the chart as the
+ * milligrams that went in, and the figure that compares between children — and
+ * that the protocol is written in — is mg/kg. So the two paths take different
+ * units for the same drug, and only one of them divides by weight.
+ */
 function pickAgent(agent) {
-  const unit = params().anaesthesia.doseUnits[agent];
+  const cfg = params().anaesthesia;
+  const unit = doseMode === 'sedation'
+    ? cfg.sedativeDoseUnits[agent]
+    : cfg.doseUnits[agent];
+
   F.m2.anaes_agent = agent;
   F.m2.anaes_dose_unit = unit || null;
   F.m2.anaes_dose = null;
@@ -769,16 +886,138 @@ function pickAgent(agent) {
     : `No charting unit is declared for ${agent}.`;
   $('doseNote').className = unit ? 'note' : 'note warn';
   $('doseField').hidden = false;
+  updateSedativeDose();
+}
+
+function updateSedativeDose() {
+  const row = $('sedTotal');
+  const value = row.lastChild;
+  F.m2.anaes_dose_per_kg = null;
+
+  if (doseMode !== 'sedation' || !F.m2.anaes_agent) { row.hidden = true; return; }
+  row.hidden = false;
+
+  const { anaes_dose: dose, anaes_dose_unit: unit, anaes_agent: agent } = F.m2;
+  const weight = F.m1.weight_kg;
+  if (dose == null || !(dose > 0)) { value.replaceChildren('—'); return; }
+
+  if (!weight) {
+    value.replaceChildren(`— ${unit}/kg`, el('span', { class: 'sub', text: `${dose} ${unit} given` }));
+    $('doseNote').className = 'note warn';
+    $('doseNote').textContent = 'Enter the weight in Module 1 — sedation is dosed per kilogram.';
+    return;
+  }
+
+  F.m2.anaes_dose_per_kg = Math.round((dose / weight) * 1000) / 1000;
+  value.replaceChildren(`${F.m2.anaes_dose_per_kg} ${unit}/kg`,
+    el('span', { class: 'sub', text: `${dose} ${unit} given` }));
+  $('doseNote').className = 'note ok';
+  $('doseNote').textContent = `${agent} ${dose} ${unit} in ${weight} kg.`;
 }
 
 function clearAgent() {
   F.m2.anaes_agent = null;
   F.m2.anaes_dose = null;
   F.m2.anaes_dose_unit = null;
+  F.m2.anaes_dose_per_kg = null;
+  $('sedTotal').hidden = true;
   $('anaesDose').value = '';
   $('agent').replaceChildren();
   $('agentField').hidden = true;
   $('doseField').hidden = true;
+}
+
+/**
+ * Non-opioid analgesia, with the route on the record.
+ *
+ * Paracetamol and diclofenac go in either intravenously or rectally, and the
+ * two are not the same event: the onset differs, the dose differs, and a
+ * suppository given at induction is a different analgesic plan from an
+ * infusion at closure. "IV paracetamol" as a single box quietly threw that
+ * away. Each dose is per kilogram, which is how these are prescribed in
+ * children.
+ */
+const nonOpioidLog = [];
+
+function buildNonOpioids() {
+  const { agents, routes } = params().nonOpioids;
+  let drug = null;
+  let route = null;
+
+  optionRow('noDrug', agents.map((a) => ({ label: a.name, value: a.name })), (name) => {
+    drug = name;
+    route = null;
+    $('noRouteField').hidden = false;
+    $('noDoseField').hidden = true;
+    optionRow('noRoute', routes, (r) => {
+      route = r;
+      $('noDose').value = '';
+      $('noDoseField').hidden = false;
+    });
+  });
+
+  $('addNonOpioid').addEventListener('click', () => {
+    const amount = num('noDose');
+    if (!drug) { toast('Pick the drug first'); return; }
+    if (!route) { toast('IV or PR?'); return; }
+    if (amount == null || !(amount > 0)) { toast('Type the dose that was given'); return; }
+    nonOpioidLog.push({ drug, route, amount, unit: 'mg' });
+    $('noDose').value = '';
+    drawNonOpioids();
+  });
+
+  drawNonOpioids();
+}
+
+function drawNonOpioids() {
+  const list = $('noList');
+  const weight = F.m1.weight_kg;
+  list.replaceChildren();
+
+  nonOpioidLog.forEach((d, i) => {
+    const perKg = weight ? `${Math.round((d.amount / weight) * 1000) / 1000} mg/kg` : 'needs weight';
+    list.append(el('li', {},
+      el('span', { text: `${d.drug} ${d.route} ${d.amount} mg` }),
+      el('span', { class: 'muted', text: perKg }),
+      el('button', {
+        type: 'button', class: 'linkish', text: 'remove',
+        onclick: () => { nonOpioidLog.splice(i, 1); drawNonOpioids(); },
+      })));
+  });
+
+  // Rebuild every column: drug and route together, because the same drug by a
+  // different route is a different administration.
+  const { agents, routes } = params().nonOpioids;
+  agents.forEach((a) => routes.forEach((r) => {
+    const key = `${a.name.toLowerCase()}_${r.toLowerCase()}`;
+    delete F.m2[`nonopioid_${key}_mg`];
+    delete F.m2[`nonopioid_${key}_per_kg`];
+  }));
+
+  const totals = new Map();
+  for (const d of nonOpioidLog) {
+    const key = `${d.drug.toLowerCase()}_${d.route.toLowerCase()}`;
+    totals.set(key, (totals.get(key) || 0) + d.amount);
+  }
+  for (const [key, amount] of totals) {
+    F.m2[`nonopioid_${key}_mg`] = Math.round(amount * 1000) / 1000;
+    if (weight) F.m2[`nonopioid_${key}_per_kg`] = Math.round((amount / weight) * 1000) / 1000;
+  }
+  F.m2.non_opioids = nonOpioidLog.length
+    ? nonOpioidLog.map((d) => `${d.drug} ${d.route} ${d.amount} mg`).join('; ')
+    : null;
+
+  const note = $('noNote');
+  if (!nonOpioidLog.length) {
+    note.className = 'note';
+    note.textContent = 'Paracetamol, diclofenac, ketorolac or ketamine — and whether it went in IV or PR.';
+  } else if (!weight) {
+    note.className = 'note warn';
+    note.textContent = 'Enter the weight in Module 1 to get these per kilogram.';
+  } else {
+    note.className = 'note ok';
+    note.textContent = F.m2.non_opioids;
+  }
 }
 
 /**
@@ -795,6 +1034,8 @@ function clearAgent() {
  * silent zero would understate the opioid load of every child who got it.
  */
 const ROUTE = 'IV';           // theatre opioids are given intravenously
+/** 'maintenance' charts a rate; 'sedation' charts an amount given. */
+let doseMode = 'maintenance';
 const opioidLog = [];
 
 function buildOpioids() {

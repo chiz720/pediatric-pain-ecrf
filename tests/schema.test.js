@@ -207,6 +207,23 @@ test('every anaesthetic agent declares the unit it is charted in', () => {
   assert.equal(units.Midazolam, 'mg/kg');     // a bolus, not a rate
 });
 
+test('a sedation dose is an amount given, a maintenance dose is a rate', () => {
+  // The same drug is charted two ways. Propofol maintaining an anaesthetic
+  // runs at mg/kg/hr and is already per kilogram; propofol given to sedate is
+  // written as the milligrams that went in, and the app divides by weight. If
+  // these two tables ever agreed for a drug, one of them would be wrong.
+  const { doseUnits, sedativeDoseUnits } = PARAMS.anaesthesia;
+  for (const agent of PARAMS.formOptions.sedativeAgent) {
+    assert.ok(sedativeDoseUnits[agent], `${agent} is offered for sedation but declares no dose unit`);
+    assert.ok(!sedativeDoseUnits[agent].includes('/'),
+      `${agent} sedation dose is ${sedativeDoseUnits[agent]} — an amount, not a rate`);
+  }
+  assert.equal(sedativeDoseUnits.Propofol, 'mg');
+  assert.equal(doseUnits.Propofol, 'mg/kg/hr');
+  assert.equal(sedativeDoseUnits.Dexmedetomidine, 'mcg');
+  assert.equal(doseUnits.Dexmedetomidine, 'mcg/kg/hr');
+});
+
 test('sedatives that cannot maintain a general anaesthetic stay off the TIVA list', () => {
   // Midazolam and dexmedetomidine sedate; neither holds a child anaesthetic on
   // its own. Offering them under General > TIVA would invite a record of a
