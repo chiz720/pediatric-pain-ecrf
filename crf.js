@@ -19,7 +19,7 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.22m-crf';
+const APP_VERSION = '2026.09.22p-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -534,7 +534,7 @@ function buildModule2() {
   // is countable instead of something an analysis has to read out of a string.
   optionRow('laterality', o.laterality, (v) => { F.m2.laterality = v; });
   optionRow('approach', o.approach, (v) => { F.m2.approach = v; });
-  optionRow('maintenance', o.maintenance, (v) => { F.m2.maintenance = v; });
+  buildAnaesthesia(o);
   optionRow('guidance', o.guidance, (v) => { F.m2.guidance = v; });
   optionRow('laDrug', o.localAnaestheticDrugs, (v) => { F.m2.la_drug = v; updateLaDose(); });
 
@@ -580,6 +580,82 @@ function updateLaDose() {
   } catch {
     note.textContent = ''; note.className = 'note';
   }
+}
+
+/**
+ * Anaesthesia, asked the way it is given.
+ *
+ * General or sedation. General asks gas or TIVA first; sedation goes straight
+ * to the drug, because it is given as a drug rather than as a circuit. Either
+ * way it ends at an agent and a dose — in the unit that agent is actually
+ * charted in. A volatile is a fraction of MAC, a propofol infusion is
+ * mg/kg/hr, a ketamine one is mcg/kg/min, and the unit is stored beside the
+ * number rather than assumed at analysis time. A rate recorded without its
+ * unit is how a tenfold error survives to the end of a study.
+ *
+ * Every branch clears what it hid. A case switched from TIVA to gas must not
+ * keep a propofol rate in mg/kg/hr sitting in the row underneath a
+ * sevoflurane percentage.
+ */
+function buildAnaesthesia(o) {
+  optionRow('anaesType', o.anaesthesiaType, (type) => {
+    F.m2.anaesthesia_type = type;
+    F.m2.maintenance_route = null;
+    [...$('maintRoute').children].forEach((b) => b.classList.remove('on'));
+    clearAgent();
+
+    if (type === 'General') {
+      // Gas or TIVA first; the agent list depends on the answer.
+      $('maintRouteField').hidden = false;
+      $('agentField').hidden = true;
+      return;
+    }
+    // Sedation is given as a drug rather than as a circuit, so there is no
+    // gas-or-TIVA question to ask — straight to which drug, and how much. Its
+    // own list, because midazolam and dexmedetomidine sedate but neither
+    // maintains a general anaesthetic on its own.
+    $('maintRouteField').hidden = true;
+    showAgents('Sedative', o.sedativeAgent);
+  });
+
+  optionRow('maintRoute', o.maintenanceRoute, (route) => {
+    F.m2.maintenance_route = route;
+    clearAgent();
+    showAgents(route === 'TIVA' ? 'Infusion' : 'Volatile agent',
+      route === 'TIVA' ? o.infusionAgent : o.gasAgent);
+  });
+
+  $('anaesDose').addEventListener('input', () => { F.m2.anaes_dose = num('anaesDose'); });
+}
+
+function showAgents(label, list) {
+  $('agentLabel').textContent = label;
+  $('agentField').hidden = false;
+  optionRow('agent', list, pickAgent);
+}
+
+function pickAgent(agent) {
+  const unit = params().anaesthesia.doseUnits[agent];
+  F.m2.anaes_agent = agent;
+  F.m2.anaes_dose_unit = unit || null;
+  F.m2.anaes_dose = null;
+  $('anaesDose').value = '';
+  $('doseUnit').textContent = unit ? `(${unit})` : '';
+  $('doseNote').textContent = unit
+    ? `As charted: ${agent} in ${unit}.`
+    : `No charting unit is declared for ${agent}.`;
+  $('doseNote').className = unit ? 'note' : 'note warn';
+  $('doseField').hidden = false;
+}
+
+function clearAgent() {
+  F.m2.anaes_agent = null;
+  F.m2.anaes_dose = null;
+  F.m2.anaes_dose_unit = null;
+  $('anaesDose').value = '';
+  $('agent').replaceChildren();
+  $('agentField').hidden = true;
+  $('doseField').hidden = true;
 }
 
 /**

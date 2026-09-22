@@ -172,10 +172,50 @@ test('PACU emergence is scored at arrival, 30 and 60 minutes', () => {
 
 test('the form option lists exist for every choice the paper form offers', () => {
   const o = PARAMS.formOptions;
-  for (const key of ['sex', 'asa', 'surgicalDomain', 'approach', 'maintenance', 'block', 'guidance', 'consent']) {
+  for (const key of ['sex', 'asa', 'surgicalDomain', 'approach', 'laterality',
+    'anaesthesiaType', 'maintenanceRoute', 'gasAgent', 'infusionAgent', 'sedativeAgent',
+    'block', 'guidance', 'consent']) {
     assert.ok(Array.isArray(o[key]) && o[key].length >= 2, `formOptions.${key} is missing or too short`);
   }
   assert.ok(o.block.includes('None'), 'the block list must allow "None"');
+  assert.ok(o.laterality.includes('Bilateral'), 'paediatric hernias come in pairs');
+});
+
+test('every anaesthetic agent declares the unit it is charted in', () => {
+  // A volatile is a fraction of MAC, a propofol infusion is mg/kg/hr and a
+  // ketamine one is mcg/kg/min. An agent offered on the form with no declared
+  // unit would record a bare number, and a rate without its unit is how a
+  // tenfold error survives to the end of a study.
+  const units = PARAMS.anaesthesia.doseUnits;
+  const offered = [...new Set([
+    ...PARAMS.formOptions.gasAgent,
+    ...PARAMS.formOptions.infusionAgent,
+    ...PARAMS.formOptions.sedativeAgent,
+  ])];
+  for (const agent of offered) {
+    assert.ok(units[agent], `${agent} is offered on the form but declares no charting unit`);
+  }
+  // And nothing is declared that the form cannot offer.
+  for (const agent of Object.keys(units)) {
+    assert.ok(offered.includes(agent), `${agent} has a unit but appears on no agent list`);
+  }
+  // The units are genuinely different from one another — that is the point of
+  // storing one per agent rather than one per form.
+  assert.equal(units.Propofol, 'mg/kg/hr');
+  assert.equal(units.Ketamine, 'mcg/kg/min');
+  assert.equal(units.Dexmedetomidine, 'mcg/kg/hr');
+  assert.equal(units.Midazolam, 'mg/kg');     // a bolus, not a rate
+});
+
+test('sedatives that cannot maintain a general anaesthetic stay off the TIVA list', () => {
+  // Midazolam and dexmedetomidine sedate; neither holds a child anaesthetic on
+  // its own. Offering them under General > TIVA would invite a record of a
+  // maintenance nobody gave.
+  const { infusionAgent, sedativeAgent } = PARAMS.formOptions;
+  for (const agent of ['Midazolam', 'Dexmedetomidine']) {
+    assert.ok(sedativeAgent.includes(agent), `${agent} should be offered for sedation`);
+    assert.ok(!infusionAgent.includes(agent), `${agent} must not be offered as TIVA maintenance`);
+  }
 });
 
 test('windows are non-decreasing as the interval lengthens', () => {

@@ -1,5 +1,5 @@
 {
-  "paramsVersion": "1.4.0",
+  "paramsVersion": "1.5.0",
   "lastReviewed": "2026-09-22",
   "countersignedBy": null,
   "countersignedOn": null,
@@ -83,6 +83,19 @@
       "_source": "Barry et al., Br J Anaesth 2021"
     }
   },
+  "anaesthesia": {
+    "_basis": "The unit each agent is charted in at the bedside. Volatiles are a fraction of MAC; a propofol infusion runs in mg/kg/hr, a ketamine one in mcg/kg/min and dexmedetomidine in mcg/kg/hr. Midazolam is given as a weight-based bolus rather than a rate, so it is charted in mg/kg. The unit travels with the number because a dose recorded without one is how a tenfold error survives into the analysis.",
+    "doseUnits": {
+      "Sevoflurane": "% MAC",
+      "Halothane": "% MAC",
+      "Isoflurane": "% MAC",
+      "Propofol": "mg/kg/hr",
+      "Ketamine": "mcg/kg/min",
+      "Midazolam": "mg/kg",
+      "Dexmedetomidine": "mcg/kg/hr"
+    }
+  },
+
   "localAnaesthetic": {
     "_source": "ESRA/ASRA joint practice advisory, Ivani et al., Reg Anesth Pain Med 2015. Single-shot maxima.",
     "warnFractionOfMax": 0.8,
@@ -364,9 +377,28 @@
       "Open",
       "Laparoscopic"
     ],
-    "maintenance": [
+    "anaesthesiaType": [
+      "General",
+      "Sedation"
+    ],
+    "maintenanceRoute": [
+      "Gas",
+      "TIVA"
+    ],
+    "gasAgent": [
       "Sevoflurane",
-      "TIVA propofol"
+      "Halothane",
+      "Isoflurane"
+    ],
+    "infusionAgent": [
+      "Propofol",
+      "Ketamine"
+    ],
+    "sedativeAgent": [
+      "Propofol",
+      "Ketamine",
+      "Midazolam",
+      "Dexmedetomidine"
     ],
     "block": [
       "Caudal",

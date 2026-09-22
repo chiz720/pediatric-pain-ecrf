@@ -201,15 +201,31 @@
     <div class="total" id="surgTotal"><span>Surgery</span><span>—</span></div>
     <p class="note" id="timesNote"></p>
 
-    <div class="grid2">
-      <div class="field">
-        <span class="lbl">GA maintenance</span>
-        <div class="opts" id="maintenance"></div>
-      </div>
-      <div class="field">
-        <label for="fentanyl">Intraoperative fentanyl <em>(µg)</em></label>
-        <input id="fentanyl" type="number" inputmode="decimal" step="1" min="0" max="1000">
-      </div>
+    <h3>Anaesthesia</h3>
+    <div class="field">
+      <span class="lbl">Type</span>
+      <div class="opts" id="anaesType"></div>
+    </div>
+
+    <div class="field" id="maintRouteField" hidden>
+      <span class="lbl">Maintenance</span>
+      <div class="opts" id="maintRoute"></div>
+    </div>
+
+    <div class="field" id="agentField" hidden>
+      <span class="lbl" id="agentLabel">Agent</span>
+      <div class="opts" id="agent"></div>
+    </div>
+
+    <div class="field" id="doseField" hidden>
+      <label for="anaesDose">Dose <em id="doseUnit"></em></label>
+      <input id="anaesDose" type="number" inputmode="decimal" step="0.1" min="0" max="500">
+      <p class="note" id="doseNote"></p>
+    </div>
+
+    <div class="field">
+      <label for="fentanyl">Intraoperative fentanyl <em>(µg)</em></label>
+      <input id="fentanyl" type="number" inputmode="decimal" step="1" min="0" max="1000">
     </div>
 
     <h3>Regional analgesia</h3>
