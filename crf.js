@@ -19,11 +19,12 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.23e-crf';
+const APP_VERSION = '2026.09.23f-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
 const SAVED_KEY = 'ppp.saved';
+const WARD_MEDS_KEY = 'ppp.wardmeds';
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, attrs = {}, ...kids) => {
@@ -205,9 +206,13 @@ function readSerial() {
 
   if (freshlyAllocated.has(studyNumber)) {
     note.textContent = `${studyNumber} — new number. Write it on the paper form before the child leaves.`;
+    loadWardMeds(studyNumber);
+    drawWardSummary();
     return;
   }
   note.textContent = studyNumber;
+  loadWardMeds(studyNumber);
+  drawWardSummary();
   confirmAgainstWorkbook(studyNumber);
 }
 
@@ -1601,8 +1606,35 @@ function buildModule4() {
  * equivalent of morphine by vein. Anything the map cannot convert is recorded,
  * totalled, and named as excluded rather than quietly counted as zero.
  */
-const wardMedLog = {};
+let wardMedLog = {};
 const wardMeds = (tp) => (wardMedLog[tp] ||= []);
+
+/**
+ * The ward log survives a reload, because a ward stay outlives a browser tab.
+ *
+ * Forty-eight hours means the phone will be locked, the tab dropped and the
+ * page reloaded several times between T2 and T48. Kept per study number, so
+ * picking up a different child does not inherit the last one's drugs.
+ *
+ * It is what THIS phone recorded and nothing more. Different people fill
+ * different timepoints on different phones, and the endpoint deliberately
+ * cannot be read back, so the summary says so on its face rather than
+ * pretending to be the child's complete ward record.
+ */
+function loadWardMeds(studyNumber) {
+  try {
+    const all = JSON.parse(localStorage.getItem(WARD_MEDS_KEY) || '{}');
+    wardMedLog = all[studyNumber] || {};
+  } catch { wardMedLog = {}; }
+}
+
+function saveWardMeds() {
+  if (!F.subjectId) return;
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(WARD_MEDS_KEY) || '{}'); } catch { all = {}; }
+  all[F.subjectId] = wardMedLog;
+  localStorage.setItem(WARD_MEDS_KEY, JSON.stringify(all));
+}
 
 function buildWardMeds() {
   const { types, routes } = params().wardAnalgesia;
@@ -1660,6 +1692,61 @@ function buildWardMeds() {
     $('wardNonOpioidDose').value = '';
     drawWardMeds();
   });
+}
+
+/**
+ * Everything given across the stay, so far, at a glance.
+ *
+ * A nurse at T24 should not have to scroll back through four timepoints to see
+ * what is on the prescription and what the child has already had for
+ * breakthrough pain — that is how a sixth dose of paracetamol gets given.
+ */
+function drawWardSummary() {
+  const panel = $('wardSoFar');
+  const body = $('wardSoFarBody');
+  const weight = F.m1.weight_kg;
+  const all = Object.entries(wardMedLog).flatMap(([tp, log]) => log.map((d) => ({ ...d, tp })));
+
+  if (!all.length) { panel.hidden = true; return; }
+  panel.hidden = false;
+  body.replaceChildren();
+
+  const roll = (rows) => {
+    const by = new Map();
+    for (const d of rows) {
+      const key = `${d.drug} ${d.route}`;
+      const cur = by.get(key) || { amount: 0, n: 0, unit: d.unit };
+      by.set(key, { amount: cur.amount + d.amount, n: cur.n + 1, unit: d.unit });
+    }
+    return [...by].map(([key, v]) =>
+      `${key} ${Math.round(v.amount * 1000) / 1000} ${v.unit}${v.n > 1 ? ` (${v.n} doses)` : ''}`);
+  };
+
+  const row = (label, text, mono) => {
+    body.append(el('dt', { text: label }), el('dd', { class: mono ? 'mono' : null, text }));
+  };
+
+  const scheduled = roll(all.filter((d) => d.type === 'Scheduled'));
+  const prn = roll(all.filter((d) => d.type !== 'Scheduled'));
+  row('Scheduled', scheduled.length ? scheduled.join(' · ') : 'none recorded', true);
+  row('Breakthrough', prn.length ? prn.join(' · ') : 'none', true);
+
+  let mme = 0;
+  let prnMme = 0;
+  for (const d of all) {
+    if (!d.opioid || !resolveMmeKey(d.drug, d.route)) continue;
+    const m = doseMme({ drug: d.drug, route: d.route, amount: d.amount, unit: d.unit });
+    mme += m;
+    if (d.type !== 'Scheduled') prnMme += m;
+  }
+  if (mme > 0) {
+    const total = Math.round(mme * 1000) / 1000;
+    const perKg = weight ? `${Math.round((mme / weight) * 1000) / 1000} mg/kg` : '— mg/kg (needs weight)';
+    row('Opioid load', `${perKg} · ${total} mg total · ${Math.round(prnMme * 1000) / 1000} mg as PRN`, true);
+  }
+
+  const tps = params().assessmentSchedule.timepoints;
+  row('Timepoints', tps.map((t) => `${t.id}${(wardMedLog[t.id] || []).length ? ' ✓' : ' —'}`).join('  '), true);
 }
 
 function drawWardMeds() {
@@ -1721,6 +1808,9 @@ function drawWardMeds() {
   } else {
     value.append('— mg/kg', el('span', { class: 'sub', text: `${store.mme_mg} mg total` }));
   }
+
+  saveWardMeds();
+  drawWardSummary();
 
   const note = $('wardMedNote');
   if (unconverted.size) {

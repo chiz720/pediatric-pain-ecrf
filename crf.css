@@ -289,6 +289,27 @@ input.bad { border-color: var(--severe); }
   background: var(--accent-soft); color: var(--accent-ink);
 }
 
+/* The standing picture of a ward stay. A nurse at T24 should not have to
+   scroll back through four timepoints to see what is prescribed and what the
+   child has already had for breakthrough pain. */
+.summary {
+  margin: 0 0 14px; padding: 12px 14px;
+  border: 1px solid var(--rule); border-radius: 10px; background: var(--surface-2);
+}
+.summary-head {
+  margin: 0 0 8px; font-size: 0.72rem; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3);
+}
+.summary-head em { font-style: normal; font-weight: 600; letter-spacing: 0.02em; text-transform: none; }
+.summary dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
+.summary dt {
+  font-size: 0.74rem; font-weight: 700; letter-spacing: 0.04em;
+  text-transform: uppercase; color: var(--ink-3); white-space: nowrap;
+}
+.summary dd { margin: 0; font-size: 0.86rem; color: var(--ink); }
+.summary dd.mono { font-family: ui-monospace, monospace; }
+@media (max-width: 520px) { .summary dl { grid-template-columns: 1fr; gap: 1px 0; } .summary dd { margin-bottom: 7px; } }
+
 /* The running dose log. Each line is one administration, removable, because
    a dose typed twice is commoner than a dose given twice. */
 .doses { list-style: none; margin: 0 0 10px; padding: 0; }
