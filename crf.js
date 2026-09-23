@@ -14,12 +14,12 @@ import { CONFIG } from './config.js';
 import { loadParams, params } from './lib/params.js';
 import { selectInstrument, monthsLabel, TOOLS } from './lib/routing.js';
 import { ageMonths, ageLabel, isFuture } from './lib/age.js';
-import { flaccTotal, paedTotal, mypasSfScore, bmi, localAnaestheticDose, doseMme, resolveMmeKey, pacuPathway } from './lib/scoring.js';
+import { flaccTotal, paedTotal, mypasSfScore, bmi, localAnaestheticDose, doseMme, resolveMmeKey, pacuPathway, painBand, isModerateToSevere } from './lib/scoring.js';
 import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/clock.js';
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.23a-crf';
+const APP_VERSION = '2026.09.23b-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -1315,6 +1315,52 @@ function buildPacuPathways() {
   });
 }
 
+/**
+ * A score that does not ask for anything is a score nobody acts on.
+ *
+ * The band is stored rather than left to be re-derived later, and at or above
+ * the moderate-to-severe threshold the form says so and points at the rescue
+ * section. Below it, it says no rescue is indicated — which is the half that
+ * matters for the dataset, because it makes an empty rescue log read as a
+ * decision rather than as a gap. Neither message blocks anything.
+ */
+function updatePacuPain() {
+  const store = (F.paed[F.paedTab] ||= {});
+  const note = $('pacuPainNote');
+  const score = store.pacu_pain;
+
+  store.pacu_pain_band = null;
+  store.pacu_rescue_indicated = null;
+
+  if (score == null) {
+    note.className = 'note';
+    note.textContent = 'Score the child before deciding anything — this is the number the rescue decision rests on.';
+    drawRescue();
+    return;
+  }
+
+  const band = painBand(score);
+  const indicated = isModerateToSevere(score);
+  store.pacu_pain_band = band;
+  store.pacu_rescue_indicated = indicated;
+
+  if (indicated) {
+    note.className = 'note warn';
+    note.textContent = `${score}/10 — ${band} pain. At or above ${params().thresholds.moderateToSevere} rescue analgesia is indicated: record what was given below.`;
+  } else {
+    note.className = 'note ok';
+    note.textContent = `${score}/10 — ${band} pain. Below the treatment threshold; no rescue indicated. Leaving the list empty records that decision.`;
+  }
+  drawRescue();
+}
+
+/** The timepoint after this one, for the reassessment prompt. */
+function nextPaedTimepoint() {
+  const tps = params().paedSchedule.timepoints;
+  const i = tps.findIndex((t) => t.id === F.paedTab);
+  return i >= 0 && i < tps.length - 1 ? tps[i + 1] : null;
+}
+
 function drawRescue() {
   const store = (F.paed[F.paedTab] ||= {});
   const log = pacuStore(F.paedTab).rescue;
@@ -1363,6 +1409,9 @@ function drawRescue() {
     value.append('— mg/kg', el('span', { class: 'sub', text: `${store.rescue_mme_mg} mg total` }));
   }
 
+  const next = nextPaedTimepoint();
+  store.rescue_reassess_at = log.length && next ? next.id : null;
+
   const note = $('rescueNote');
   if (unconverted.size) {
     note.className = 'note warn';
@@ -1370,6 +1419,13 @@ function drawRescue() {
   } else if (anyOpioid && !weight) {
     note.className = 'note warn';
     note.textContent = 'Enter the weight in Module 1 to express this per kilogram.';
+  } else if (log.length && next) {
+    // Rescue given means the question is now whether it worked.
+    note.className = 'note ok';
+    note.textContent = `Given at this timepoint. Score again at ${next.label} to see whether it worked.`;
+  } else if (!log.length && store.pacu_rescue_indicated === true) {
+    note.className = 'note warn';
+    note.textContent = 'Rescue is indicated by the score and nothing is recorded yet.';
   } else {
     note.className = 'note';
     note.textContent = 'Everything given for pain at this timepoint. Opioids are added to the morphine equivalent.';
@@ -1444,8 +1500,8 @@ function drawPacuPathways() {
 
   if (pathway === 'pain') {
     $('pacuScaleLabel').textContent = `Pain score — ${toolName(routed ? routed.tool : null) || 'enter the age in Module 1'}`;
-    paintScale($('pacuScale'), store, 'pacu_pain');
-    drawRescue();
+    paintScale($('pacuScale'), store, 'pacu_pain', updatePacuPain);
+    updatePacuPain();
   }
   if (pathway === 'delirium') drawDelirium();
 }
@@ -1534,24 +1590,24 @@ function drawWardScales() {
   paintScale($('moveScale'), store, 'move');
 }
 
-function paintScale(container, store, which) {
+function paintScale(container, store, which, onChange) {
   container.replaceChildren();
   if (!routed) {
     container.append(el('p', { class: 'note', text: 'Enter age in Module 1 first.' }));
     return;
   }
   if (routed.tool === TOOLS.FLACC || routed.tool === TOOLS.R_FLACC) {
-    container.append(flaccUI(store, which));
+    container.append(flaccUI(store, which, onChange));
   } else if (routed.tool === TOOLS.FPS_R) {
-    container.append(facesUI(store, which));
+    container.append(facesUI(store, which, onChange));
   } else {
-    container.append(numbersUI(store, which));
+    container.append(numbersUI(store, which, onChange));
   }
 }
 
 const band = (n) => (n === 0 ? 'none' : n <= 3 ? 'mild' : n <= 6 ? 'moderate' : 'severe');
 
-function numbersUI(store, which) {
+function numbersUI(store, which, onChange) {
   const wrap = el('div', {});
   const grid = el('div', { class: 'scale' });
   for (let i = 0; i <= 10; i += 1) {
@@ -1561,6 +1617,7 @@ function numbersUI(store, which) {
         store[which] = i;
         [...grid.children].forEach((c) => c.classList.remove('on'));
         e.currentTarget.classList.add('on');
+        if (onChange) onChange();
       },
     }));
   }
@@ -1569,7 +1626,7 @@ function numbersUI(store, which) {
   return wrap;
 }
 
-function facesUI(store, which) {
+function facesUI(store, which, onChange) {
   const wrap = el('div', {});
   const grid = el('div', { class: 'faces' });
   for (let i = 0; i < 6; i += 1) {
@@ -1579,6 +1636,7 @@ function facesUI(store, which) {
         store[which] = i * 2;
         [...grid.children].forEach((c) => c.classList.remove('on'));
         e.currentTarget.classList.add('on');
+        if (onChange) onChange();
       },
     }, faceSvg(i)));
   }
@@ -1615,7 +1673,7 @@ const FLACC = [
   ['consolability', 'Consolability', ['Content, relaxed', 'Reassured by touch or talk', 'Difficult to console']],
 ];
 
-function flaccUI(store, which) {
+function flaccUI(store, which, onChange) {
   const key = which === 'rest' ? 'flacc_rest' : which === 'move' ? 'flacc_move' : `flacc_${which}`;
   const items = (store[key] ||= {});
   const wrap = el('div', {});
@@ -1627,6 +1685,7 @@ function flaccUI(store, which) {
       store[which] = flaccTotal(items);
       totalEl.lastChild.textContent = `${store[which]} / 10`;
     } catch { store[which] = null; totalEl.lastChild.textContent = '— / 10'; }
+    if (onChange) onChange();
   };
 
   FLACC.forEach(([k, label, options]) => {

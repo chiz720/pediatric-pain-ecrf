@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import {
   flaccTotal, paedTotal, fpsrScore, nrsScore, mypasSfScore, painBand, bmi,
   localAnaestheticDose, doseMme, fentanylEquivalents, pacuClassification,
-  respiratoryDepression, restrictedForAge, resolveMmeKey, pacuPathway,
+  respiratoryDepression, restrictedForAge, resolveMmeKey, pacuPathway, isModerateToSevere,
 } from '../lib/scoring.js';
 
 const at = '2026-09-11';
@@ -291,4 +291,22 @@ test('the PACU pathway turns on the cutoff and invents no threshold of its own',
   assert.equal(pacuPathway({ paedTotal: cutoff - 1, purposeful: 0 }).pathway, 'pain');
   assert.equal(pacuPathway({ paedTotal: cutoff, purposeful: 0 }).pathway, 'delirium');
   assert.throws(() => pacuPathway({ paedTotal: 21, purposeful: 0 }), /PAED total/);
+});
+
+test('the treatment threshold and the pain bands agree on where moderate starts', () => {
+  // The PACU prompt says "at or above N, rescue is indicated" and bands the
+  // same number as moderate. If these two parameters ever drifted apart the
+  // form would contradict itself on screen.
+  const t = PARAMS.thresholds;
+  assert.equal(painBand(t.moderateToSevere), 'moderate');
+  assert.equal(painBand(t.moderateToSevere - 1), 'mild');
+  assert.equal(painBand(t.severePain), 'severe');
+  assert.equal(isModerateToSevere(t.moderateToSevere), true);
+  assert.equal(isModerateToSevere(t.moderateToSevere - 1), false);
+
+  // And the whole 0-10 metric is banded, since any of FLACC, FPS-R or NRS can
+  // land in this box.
+  for (let score = 0; score <= 10; score += 1) {
+    assert.ok(['none', 'mild', 'moderate', 'severe'].includes(painBand(score)));
+  }
 });
