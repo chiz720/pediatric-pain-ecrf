@@ -1,5 +1,5 @@
 {
-  "paramsVersion": "1.9.0",
+  "paramsVersion": "1.10.0",
   "lastReviewed": "2026-09-22",
   "countersignedBy": null,
   "countersignedOn": null,
@@ -101,6 +101,12 @@
       "Midazolam": "mg/kg",
       "Dexmedetomidine": "mcg/kg/hr"
     }
+  },
+
+  "wardAnalgesia": {
+    "_note": "What is given on the ward, and whether it was on the prescription or given for breakthrough pain. The distinction is not cosmetic: breakthroughPain counts PRN rescue, so a scheduled six-hourly paracetamol must not be mistaken for one. Route names match the drug/route map in lib/scoring.js exactly, because morphine converts to a different morphine equivalent by mouth than by vein.",
+    "types": ["Scheduled", "Rescue (PRN)"],
+    "routes": ["Oral", "IV", "Rectal"]
   },
 
   "pacuDelirium": {

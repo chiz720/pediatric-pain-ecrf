@@ -19,7 +19,7 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.23d-crf';
+const APP_VERSION = '2026.09.23e-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -344,6 +344,7 @@ function buildModule1() {
     drawAdjuvants();       // and every block adjuvant
     drawNonOpioids();      // and the non-opioids
     drawPacuPathways();    // and anything given in recovery
+    drawWardMeds();        // and on the ward
   };
   $('weight').addEventListener('input', recalcBmi);
   $('height').addEventListener('input', recalcBmi);
@@ -1573,12 +1574,175 @@ function buildModule4() {
     }));
   });
   yesNo('rebound', (v) => { (F.ward[F.wardTab] ||= {}).rebound = v; });
-  yesNo('rescue', (v) => { (F.ward[F.wardTab] ||= {}).rescue = v; });
+  yesNo('rescue', (v) => {
+    (F.ward[F.wardTab] ||= {}).analgesia_any = v;
+    $('wardMeds').hidden = !v;
+    drawWardMeds();
+  });
+  buildWardMeds();
   drawWardScales();
+}
+
+/* ---------------- ward analgesia ---------------- */
+
+/**
+ * What was given on the ward, and whether it was prescribed or for
+ * breakthrough pain.
+ *
+ * That distinction is the point of the section rather than a nicety:
+ * breakthroughPain counts PRN rescue, so a six-hourly paracetamol that happens
+ * to fall at T6 must not be counted as a breakthrough event. One tap of "No"
+ * is still the whole answer when nothing was given — the drug list only opens
+ * when there is something to record, because this is asked five times per
+ * child over 48 hours.
+ *
+ * Route is asked for every drug, and the route names match the map in
+ * lib/scoring.js exactly, because morphine by mouth is a third of the morphine
+ * equivalent of morphine by vein. Anything the map cannot convert is recorded,
+ * totalled, and named as excluded rather than quietly counted as zero.
+ */
+const wardMedLog = {};
+const wardMeds = (tp) => (wardMedLog[tp] ||= []);
+
+function buildWardMeds() {
+  const { types, routes } = params().wardAnalgesia;
+  const opioids = params().opioids.intraoperative.agents;
+  const nonOpioids = params().nonOpioids.agents;
+  let type = null;
+  let opioid = null;
+  let opioidRoute = null;
+  let nonOpioid = null;
+  let nonOpioidRoute = null;
+
+  optionRow('wardType', types, (v) => { type = v; });
+
+  optionRow('wardOpioid', opioids.map((a) => ({ label: a.name, value: a.name })), (name) => {
+    opioid = opioids.find((a) => a.name === name) || null;
+    opioidRoute = null;
+    $('wardOpioidUnit').textContent = opioid ? `(${opioid.unit})` : '';
+    $('wardOpioidRouteField').hidden = !opioid;
+    $('wardOpioidDoseField').hidden = true;
+    optionRow('wardOpioidRoute', routes, (r) => {
+      opioidRoute = r;
+      $('wardOpioidDose').value = '';
+      $('wardOpioidDoseField').hidden = false;
+    });
+  });
+  $('addWardOpioid').addEventListener('click', () => {
+    const amount = num('wardOpioidDose');
+    if (!type) { toast('Prescribed, or for breakthrough?'); return; }
+    if (!opioid) { toast('Pick the opioid first'); return; }
+    if (!opioidRoute) { toast('Which route?'); return; }
+    if (amount == null || !(amount > 0)) { toast('Type the dose that was given'); return; }
+    wardMeds(F.wardTab).push({ type, drug: opioid.name, route: opioidRoute, amount, unit: opioid.unit, opioid: true });
+    $('wardOpioidDose').value = '';
+    drawWardMeds();
+  });
+
+  optionRow('wardNonOpioid', nonOpioids.map((a) => ({ label: a.name, value: a.name })), (name) => {
+    nonOpioid = name;
+    nonOpioidRoute = null;
+    $('wardNonOpioidRouteField').hidden = false;
+    $('wardNonOpioidDoseField').hidden = true;
+    optionRow('wardNonOpioidRoute', routes, (r) => {
+      nonOpioidRoute = r;
+      $('wardNonOpioidDose').value = '';
+      $('wardNonOpioidDoseField').hidden = false;
+    });
+  });
+  $('addWardNonOpioid').addEventListener('click', () => {
+    const amount = num('wardNonOpioidDose');
+    if (!type) { toast('Prescribed, or for breakthrough?'); return; }
+    if (!nonOpioid) { toast('Pick the drug first'); return; }
+    if (!nonOpioidRoute) { toast('Which route?'); return; }
+    if (amount == null || !(amount > 0)) { toast('Type the dose that was given'); return; }
+    wardMeds(F.wardTab).push({ type, drug: nonOpioid, route: nonOpioidRoute, amount, unit: 'mg', opioid: false });
+    $('wardNonOpioidDose').value = '';
+    drawWardMeds();
+  });
+}
+
+function drawWardMeds() {
+  const store = (F.ward[F.wardTab] ||= {});
+  const log = wardMeds(F.wardTab);
+  const weight = F.m1.weight_kg;
+  const list = $('wardMedList');
+  list.replaceChildren();
+
+  let mme = 0;
+  let prnMme = 0;
+  const unconverted = new Set();
+
+  log.forEach((d, i) => {
+    let per = weight ? `${Math.round((d.amount / weight) * 1000) / 1000} ${d.unit}/kg` : 'needs weight';
+    if (d.opioid) {
+      if (resolveMmeKey(d.drug, d.route)) {
+        const m = doseMme({ drug: d.drug, route: d.route, amount: d.amount, unit: d.unit });
+        mme += m;
+        if (d.type !== 'Scheduled') prnMme += m;
+      } else {
+        unconverted.add(`${d.drug} ${d.route}`);
+        per += ' · not converted';
+      }
+    }
+    list.append(el('li', {},
+      el('span', { text: `${d.drug} ${d.route} ${d.amount} ${d.unit}` }),
+      el('span', { class: 'muted', text: `${d.type === 'Scheduled' ? 'scheduled' : 'PRN'} · ${per}` }),
+      el('button', {
+        type: 'button', class: 'linkish', text: 'remove',
+        onclick: () => { log.splice(i, 1); drawWardMeds(); },
+      })));
+  });
+
+  const prn = log.filter((d) => d.type !== 'Scheduled');
+  const anyOpioid = log.some((d) => d.opioid);
+
+  store.meds_given = log.length
+    ? log.map((d) => `${d.type === 'Scheduled' ? 'S' : 'PRN'} ${d.drug} ${d.route} ${d.amount} ${d.unit}`).join('; ')
+    : null;
+  store.meds_dose_count = log.length;
+  store.scheduled_doses = log.filter((d) => d.type === 'Scheduled').length;
+  store.prn_doses = prn.length;
+  // The breakthrough endpoint counts PRN rescue, so this is the flag it needs.
+  store.rescue_given = prn.length > 0;
+  store.mme_mg = anyOpioid ? Math.round(mme * 1000) / 1000 : null;
+  store.prn_mme_mg = anyOpioid ? Math.round(prnMme * 1000) / 1000 : null;
+  store.mme_per_kg = (store.mme_mg != null && weight)
+    ? Math.round((store.mme_mg / weight) * 1000) / 1000 : null;
+  store.mme_excluded = unconverted.size ? [...unconverted].join('; ') : null;
+
+  const value = $('wardMme').lastChild;
+  value.replaceChildren();
+  if (!anyOpioid) {
+    value.append('—');
+  } else if (store.mme_per_kg != null) {
+    value.append(`${store.mme_per_kg} mg/kg`,
+      el('span', { class: 'sub', text: `${store.mme_mg} mg total · ${store.prn_mme_mg} mg as PRN` }));
+  } else {
+    value.append('— mg/kg', el('span', { class: 'sub', text: `${store.mme_mg} mg total` }));
+  }
+
+  const note = $('wardMedNote');
+  if (unconverted.size) {
+    note.className = 'note warn';
+    note.textContent = `${[...unconverted].join(' and ')} has no published conversion for that route, so it is recorded but left out of the morphine equivalent.`;
+  } else if (anyOpioid && !weight) {
+    note.className = 'note warn';
+    note.textContent = 'Enter the weight in Module 1 to express this per kilogram.';
+  } else if (!log.length) {
+    note.className = 'note';
+    note.textContent = 'Each dose, and whether it was on the prescription or given for breakthrough pain.';
+  } else {
+    note.className = 'note ok';
+    note.textContent = `${store.scheduled_doses} scheduled, ${store.prn_doses} for breakthrough.`;
+  }
 }
 
 function refreshWardTabs() {
   markSaveButton('m4', F.wardTab);
+  const store = F.ward[F.wardTab] || {};
+  $('wardMeds').hidden = store.analgesia_any !== true;
+  drawWardMeds();
   [...$('wardTabs').children].forEach((b) => {
     b.classList.toggle('on', b.dataset.tp === F.wardTab);
     b.classList.toggle('filled', Boolean(F.ward[b.dataset.tp]?.saved));
@@ -1828,8 +1992,18 @@ async function saveModule(mod) {
       tool_used: routed ? routed.tool : null,
       age_months: F.m1.age_months ?? null,
       rest_pain: w.rest ?? null, dynamic_pain: w.move ?? null,
-      rebound: w.rebound ?? null, rescue_given: w.rescue ?? null,
+      rebound: w.rebound ?? null,
       flacc_rest: w.flacc_rest || null, flacc_dynamic: w.flacc_move || null,
+      analgesia_any: w.analgesia_any ?? null,
+      meds_given: w.meds_given ?? null,
+      meds_dose_count: w.meds_dose_count ?? null,
+      scheduled_doses: w.scheduled_doses ?? null,
+      prn_doses: w.prn_doses ?? null,
+      rescue_given: w.rescue_given ?? null,
+      mme_mg: w.mme_mg ?? null,
+      prn_mme_mg: w.prn_mme_mg ?? null,
+      mme_per_kg: w.mme_per_kg ?? null,
+      mme_excluded: w.mme_excluded ?? null,
     };
   }
   if (mod === 'm5') data = { ...header, ...F.m5 };

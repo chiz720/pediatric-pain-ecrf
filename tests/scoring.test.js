@@ -338,3 +338,34 @@ test('an anchor with no wording fails loudly rather than labelling it undefined'
   // breaks here, so a new anchor in params must be given words deliberately.
   assert.throws(() => reboundCriteria('nonexistent'), /No rebound definition/);
 });
+
+test('ward route names are ones the morphine-equivalent map understands', () => {
+  // This is the whole reason the ward routes are "Oral / IV / Rectal" and not
+  // "PO / IV / PR": resolveMmeKey matches on these exact strings, and a label
+  // of "PO" would silently convert every oral morphine dose to nothing.
+  const { routes } = PARAMS.wardAnalgesia;
+  const factors = PARAMS.opioids.mme.factors;
+  let convertible = 0;
+
+  for (const agent of PARAMS.opioids.intraoperative.agents) {
+    for (const route of routes) {
+      const key = resolveMmeKey(agent.name, route);
+      if (!key) continue;          // recorded and named as excluded, by design
+      convertible += 1;
+      assert.ok(factors[key], `${agent.name} ${route} maps to ${key}, which has no factor`);
+      assert.equal(agent.unit, factors[key].unit,
+        `${agent.name} is offered in ${agent.unit} but ${key} converts from ${factors[key].unit}`);
+    }
+  }
+  // If a rename ever broke every route, this would silently pass without it.
+  assert.ok(convertible >= 3, `only ${convertible} ward drug/route pairs convert at all`);
+});
+
+test('morphine by mouth is not the same morphine equivalent as by vein', () => {
+  // The ward asks for route because of exactly this. Ten milligrams is ten
+  // MME orally and thirty intravenously; recording the route as a detail
+  // rather than a variable would misstate every oral dose threefold.
+  assert.equal(doseMme({ drug: 'Morphine', route: 'Oral', amount: 10, unit: 'mg' }), 10);
+  assert.equal(doseMme({ drug: 'Morphine', route: 'IV', amount: 10, unit: 'mg' }), 30);
+  assert.equal(doseMme({ drug: 'Morphine', route: 'Rectal', amount: 10, unit: 'mg' }), 10);
+});

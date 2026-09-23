@@ -428,9 +428,48 @@
         <div class="opts yn" id="rebound"></div>
       </div>
       <div class="field">
-        <span class="lbl">Rescue given?</span>
+        <span class="lbl">Any analgesia since the last check?</span>
         <div class="opts yn" id="rescue"></div>
       </div>
+    </div>
+
+    <div id="wardMeds" hidden>
+      <div class="field">
+        <span class="lbl">On the prescription, or for breakthrough?</span>
+        <div class="opts yn" id="wardType"></div>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Opioid</span>
+        <div class="opts" id="wardOpioid"></div>
+      </div>
+      <div class="field" id="wardOpioidRouteField" hidden>
+        <span class="lbl">Route</span>
+        <div class="opts" id="wardOpioidRoute"></div>
+      </div>
+      <div class="field" id="wardOpioidDoseField" hidden>
+        <label for="wardOpioidDose">Dose <em id="wardOpioidUnit"></em></label>
+        <input id="wardOpioidDose" type="number" inputmode="decimal" step="0.5" min="0" max="2000">
+        <button class="secondary" id="addWardOpioid" type="button">Add this dose</button>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Non-opioid</span>
+        <div class="opts" id="wardNonOpioid"></div>
+      </div>
+      <div class="field" id="wardNonOpioidRouteField" hidden>
+        <span class="lbl">Route</span>
+        <div class="opts" id="wardNonOpioidRoute"></div>
+      </div>
+      <div class="field" id="wardNonOpioidDoseField" hidden>
+        <label for="wardNonOpioidDose">Dose <em>(mg)</em></label>
+        <input id="wardNonOpioidDose" type="number" inputmode="decimal" step="1" min="0" max="2000">
+        <button class="secondary" id="addWardNonOpioid" type="button">Add this dose</button>
+      </div>
+
+      <ul class="doses" id="wardMedList"></ul>
+      <div class="total" id="wardMme"><span>Morphine equivalent</span><span>—</span></div>
+      <p class="note" id="wardMedNote"></p>
     </div>
 
     <button class="save" data-save="m4">Save this timepoint</button>
