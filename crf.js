@@ -14,12 +14,12 @@ import { CONFIG } from './config.js';
 import { loadParams, params } from './lib/params.js';
 import { selectInstrument, monthsLabel, TOOLS } from './lib/routing.js';
 import { ageMonths, ageLabel, isFuture } from './lib/age.js';
-import { flaccTotal, paedTotal, mypasSfScore, bmi, localAnaestheticDose, doseMme, resolveMmeKey, pacuPathway, painBand, isModerateToSevere } from './lib/scoring.js';
+import { flaccTotal, paedTotal, mypasSfScore, bmi, localAnaestheticDose, doseMme, resolveMmeKey, pacuPathway, painBand, isModerateToSevere, reboundCriteria } from './lib/scoring.js';
 import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/clock.js';
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.23b-crf';
+const APP_VERSION = '2026.09.23d-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -92,6 +92,12 @@ async function boot() {
     F.evalDate = $('evalDate').value;
     ageFromDob();          // age is age *at assessment*, so it moves with the date
   });
+
+  // Both rebound questions state the same criteria, written from the same
+  // parameters, so the screen cannot contradict what is being enforced.
+  const criteria = `(${reboundCriteria('protocol')})`;
+  $('reboundCriteriaWard').textContent = criteria;
+  $('reboundCriteriaOffset').textContent = criteria;
 
   buildAdmin();
   showWho();              // the header line carries the centre too, and buildAdmin restores it

@@ -6,6 +6,7 @@ import {
   flaccTotal, paedTotal, fpsrScore, nrsScore, mypasSfScore, painBand, bmi,
   localAnaestheticDose, doseMme, fentanylEquivalents, pacuClassification,
   respiratoryDepression, restrictedForAge, resolveMmeKey, pacuPathway, isModerateToSevere,
+  reboundCriteria,
 } from '../lib/scoring.js';
 
 const at = '2026-09-11';
@@ -309,4 +310,31 @@ test('the treatment threshold and the pain bands agree on where moderate starts'
   for (let score = 0; score <= 10; score += 1) {
     assert.ok(['none', 'mild', 'moderate', 'severe'].includes(painBand(score)));
   }
+});
+
+test('the rebound criteria on screen are written from the parameters', () => {
+  // The wording used to be literal text in two places in the form, so a
+  // change to windowHours left the screen contradicting the definition it was
+  // meant to be enforcing. Every number in the label now comes from params.
+  const d = PARAMS.rebound.protocol;
+  const label = reboundCriteria();
+  assert.match(label, new RegExp(`\u2264${d.fromAtMost}`));
+  assert.match(label, new RegExp(`\u2265${d.toAtLeast}`));
+  assert.match(label, new RegExp(`within ${d.windowHours} h`));
+  assert.match(label, /block wearing off/);        // anchor: sensory_regression
+  assert.match(label, /with rescue/);              // requireRescue: true
+
+  // The published definition differs in every one of those respects, and the
+  // same function must say so rather than repeating the protocol's wording.
+  const barry = reboundCriteria('barry');
+  assert.match(barry, new RegExp(`within ${PARAMS.rebound.barry.windowHours} h`));
+  assert.match(barry, /block going in/);           // anchor: block_placement
+  assert.ok(!barry.includes('with rescue'));       // requireRescue: false
+  assert.notEqual(label, barry);
+});
+
+test('an anchor with no wording fails loudly rather than labelling it undefined', () => {
+  // A nurse reading nonsense criteria at 3 a.m. is worse than a build that
+  // breaks here, so a new anchor in params must be given words deliberately.
+  assert.throws(() => reboundCriteria('nonexistent'), /No rebound definition/);
 });
