@@ -1,6 +1,6 @@
 {
-  "paramsVersion": "1.10.0",
-  "lastReviewed": "2026-09-22",
+  "paramsVersion": "1.11.0",
+  "lastReviewed": "2026-09-25",
   "countersignedBy": null,
   "countersignedOn": null,
   "_note": "Every value here is a protocol parameter with a published source. Changing any of them changes a study endpoint. Bump paramsVersion, record the countersignature, and never edit mid-camp.",
