@@ -52,6 +52,28 @@ test('the camp key in the endpoint matches the one the app sends', () => {
 });
 
 /*
+ * Every element the app reaches for has to be in the page.
+ *
+ * $('someId') on a missing element returns null, and the next property access
+ * throws — which in practice means the whole form stops building at whatever
+ * point the typo sits, often with modules below it never rendered. It is the
+ * commonest way to break this app and it cannot be caught by reading the
+ * diff, because the two halves live in different files.
+ */
+test('every element id the app looks up exists in the page', () => {
+  const js = read('crf.js');
+  const html = read('index.html');
+
+  const present = new Set([...html.matchAll(/id="([^"]+)"/g)].map((m) => m[1]));
+  const wanted = [...js.matchAll(/\$\('([A-Za-z][\w-]*)'\)/g)].map((m) => m[1]);
+
+  const missing = [...new Set(wanted)].filter((id) => !present.has(id)).sort();
+  assert.deepEqual(missing, [],
+    `crf.js looks up ${missing.length} element id(s) that index.html does not define: ${missing.join(', ')}. `
+    + 'The form would stop building at the first one.');
+});
+
+/*
  * A file the service worker precaches but the repo does not have is a deploy
  * that installs nothing: the install step fetches every shell entry and throws
  * if one is missing, so the new worker never activates and devices stay on the

@@ -19,7 +19,7 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.25d-crf';
+const APP_VERSION = '2026.09.25e-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -110,6 +110,7 @@ async function boot() {
   buildModule3();
   buildModule4();
   buildModule5();
+  buildRound();
 
   document.querySelectorAll('.save').forEach((b) =>
     b.addEventListener('click', () => saveModule(b.dataset.save)));
@@ -249,6 +250,7 @@ function rememberRecent(studyNumber) {
   list.unshift({ sn: studyNumber, ts: Date.now() });
   localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX)));
   drawRecent();
+  drawRound();
 }
 
 function drawRecent() {
@@ -314,6 +316,106 @@ function selectNextTimepoints(studyNumber) {
   refreshPaedTabs();
   drawWardScales();
   drawPaedItems();
+}
+
+/* ---------------- ward round ---------------- */
+
+/**
+ * One timepoint, every child on this phone.
+ *
+ * The round is the inverse of the rest of the form: a nurse walking a ward at
+ * T6 works across children at one timepoint, while the form is built around one
+ * child across timepoints. Going through the child-shaped door means returning
+ * to the serial screen at every bed.
+ *
+ * It is a view over what this phone has saved and nothing more. Different
+ * people fill different timepoints on different phones and the endpoint cannot
+ * be read back, so a child scored by someone else still shows as due here. That
+ * is a duplicate row, which the study resolves by supersedes and would rather
+ * have than a gap.
+ */
+const round = { tp: null };
+
+function buildRound() {
+  $('roundStart').addEventListener('click', () => {
+    $('roundBody').hidden = false;
+    $('roundStart').hidden = true;
+    drawRound();
+  });
+
+  $('roundExit').addEventListener('click', () => {
+    round.tp = null;
+    $('roundBody').hidden = true;
+    $('roundStart').hidden = false;
+    $('roundListWrap').hidden = true;
+  });
+
+  optionRow('roundTp',
+    params().assessmentSchedule.timepoints.map((tp) => ({ label: tp.label, value: tp.id })),
+    (id) => { round.tp = id; drawRound(); });
+}
+
+function drawRound() {
+  const wrap = $('roundListWrap');
+  const box = $('roundList');
+  const note = $('roundNote');
+  if (!wrap || !box) return;
+
+  wrap.hidden = !round.tp;
+  if (!round.tp) return;
+
+  const tp = params().assessmentSchedule.timepoints.find((t) => t.id === round.tp);
+  const children = recentList();
+  box.replaceChildren();
+
+  let due = 0;
+  children.forEach(({ sn }) => {
+    const done = Boolean(lastSavedUuid(sn, 'm4', round.tp));
+    if (!done) due += 1;
+    box.append(el('button', {
+      type: 'button',
+      class: `${done ? 'done' : ''}${sn === F.subjectId ? ' on' : ''}`.trim(),
+      text: `${sn.slice(-4)}${done ? ' ✓' : ''}`,
+      onclick: () => openRoundChild(sn),
+    }));
+  });
+
+  if (!children.length) {
+    note.className = 'note';
+    note.textContent = 'No children on this phone yet. Enrol one below, or open one by its number once.';
+    return;
+  }
+  note.className = due ? 'note warn' : 'note ok';
+  note.textContent = due
+    ? `${children.length} ${children.length === 1 ? 'child' : 'children'} on this phone · ${due} still due at ${tp.label}.`
+    : `Every child on this phone has ${tp.label} recorded.`;
+}
+
+/**
+ * Open a child straight onto the round's timepoint.
+ *
+ * readSerial() normally points the tabs at the first timepoint a child has not
+ * had, which is right when opening one child and wrong in the middle of a
+ * round: the round is at T6 and stays at T6 even for a child whose T2 was
+ * missed. Set after, so the round wins.
+ */
+function openRoundChild(studyNumber) {
+  $('subjectSeq').value = studyNumber.slice(-4);
+  readSerial();
+  if (round.tp) {
+    F.wardTab = round.tp;
+    refreshWardTabs();
+    drawWardScales();
+  }
+  drawRound();
+  document.querySelector('[data-module="m4"]')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+/** After a ward save during a round, go back to the list with the next child. */
+function returnToRound() {
+  if (!round.tp) return;
+  drawRound();
+  $('roundCard')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
 }
 
 function enrolledHere() {
@@ -2453,7 +2555,12 @@ async function saveModule(mod) {
   markSaveButton(mod, timepoint);
 
   if (mod === 'm3') { (F.paed[F.paedTab] ||= {}).saved = true; refreshPaedTabs(); }
-  if (mod === 'm4') { (F.ward[F.wardTab] ||= {}).saved = true; refreshWardTabs(); }
+  if (mod === 'm4') {
+    (F.ward[F.wardTab] ||= {}).saved = true;
+    refreshWardTabs();
+    // Mid-round, the next thing wanted is the next child, not this one again.
+    returnToRound();
+  }
   if (['m1', 'm2', 'm5'].includes(mod)) {
     document.querySelector(`[data-module="${mod}"]`).classList.add('done');
   }

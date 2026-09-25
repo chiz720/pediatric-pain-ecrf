@@ -137,6 +137,18 @@ input.bad { border-color: var(--severe); }
 .opts button.on {
   background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600;
 }
+
+/* ---------- ward round ---------- */
+/* Fixed-width cells so a round reads as a grid of beds to work through rather
+   than a paragraph of buttons, and so the eye can find what is still due. */
+.round-list button {
+  flex: 0 0 auto; min-width: 82px; font-variant-numeric: tabular-nums;
+}
+/* Done is recessive on purpose: what matters mid-round is what is still owed. */
+.round-list button.done {
+  opacity: 0.55; text-decoration: none; font-weight: 400;
+}
+#roundStart { width: 100%; }
 .checks { display: flex; flex-direction: column; gap: 6px; }
 .checks button { text-align: left; display: flex; align-items: center; gap: 10px; }
 .checks button::before {

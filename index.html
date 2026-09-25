@@ -26,6 +26,34 @@
 
 <main>
 
+  <!--
+    ══════════ Ward round ══════════
+
+    A round is one timepoint across many children; the rest of this form is one
+    child across many timepoints. Working a round through the child-shaped door
+    means typing a serial at every bed, which is slow and is the one mistake the
+    enrolment check cannot catch — a mistyped number belonging to another
+    enrolled child files one child's pain under another.
+
+    Collapsed to a single line until asked for, because the enrolling clinician
+    never does a round and should not have to scroll past one.
+  -->
+  <section class="card" id="roundCard">
+    <button class="secondary" id="roundStart" type="button">Ward round — score one timepoint across the ward</button>
+
+    <div id="roundBody" hidden>
+      <div class="field">
+        <span class="lbl">Which timepoint</span>
+        <div class="opts" id="roundTp"></div>
+      </div>
+      <div id="roundListWrap" hidden>
+        <div class="opts round-list" id="roundList"></div>
+        <p class="note" id="roundNote"></p>
+      </div>
+      <button class="linkish" id="roundExit" type="button">leave the round</button>
+    </div>
+  </section>
+
   <!-- ══════════ Administrative & enrollment header ══════════ -->
   <section class="card" id="adminCard">
     <h2>Administrative &amp; enrollment</h2>
