@@ -70,6 +70,17 @@
         <input id="subjectSeq" class="mono" type="text" inputmode="numeric"
                autocomplete="off" spellcheck="false" maxlength="4" placeholder="0001">
       </div>
+      <!--
+        The number is allocated, never invented, and that is not obvious from a
+        box you can type in: an empty field looks like something to fill in. The
+        pointer sits above the button so the hand points at what to press, and
+        it goes as soon as anything is typed — a nurse copying a number off the
+        paper form is not being told to ask for a new one.
+      -->
+      <p class="handhint" id="newPatientHint">
+        <span class="hand" aria-hidden="true">👇</span>
+        New child? Tap below for the next number — don't invent one.
+      </p>
       <button class="secondary" id="newPatient" type="button">New patient — get the next number</button>
       <p class="note" id="subjectNote"></p>
 

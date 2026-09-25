@@ -19,7 +19,7 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.25i-crf';
+const APP_VERSION = '2026.09.25j-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -179,6 +179,10 @@ function readSerial() {
 
   $('serialPrefix').textContent = centre ? `PPP-${centre.code}-` : 'PPP-··-';
   input.className = 'mono';
+  // Point at the button only while there is nothing in the box and a centre to
+  // allocate against. Someone copying a number off the paper form should not be
+  // nudged to ask for a different one.
+  $('newPatientHint').hidden = Boolean(digits) || !centre;
   F.subjectId = '';
 
   if (!centre) {
