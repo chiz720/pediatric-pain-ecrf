@@ -7,7 +7,7 @@
 
 export const CONFIG = {
   /** The deployed Apps Script web app. Ends in /exec. */
-  endpointUrl: 'https://script.google.com/macros/s/AKfycbxbBbo1cK7n_X1dHdw9_FIwq569wXoZEmPn5PwhbQeWtd0WKE7t4q0B7w3ks1i8F_yW/exec',
+  endpointUrl: 'https://script.google.com/macros/s/AKfycbzr7zwSZXG0wYl5XtFCf1WWCn8vEhVSUJcC-JOBbBjKiGKfqkMaGhTnbLiConK6N5io/exec',
 
   /**
    * A single shared camp key, baked in so nobody ever types one.
