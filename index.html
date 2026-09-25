@@ -44,6 +44,20 @@
       </div>
       <button class="secondary" id="newPatient" type="button">New patient — get the next number</button>
       <p class="note" id="subjectNote"></p>
+
+      <!--
+        The children this phone has already worked on.
+
+        A ward round means opening the same child five times over 48 hours, and
+        typing four digits each time is both slow and the one error the
+        enrolment check cannot catch: a mistyped number that happens to belong
+        to another enrolled child files one child's pain score under another.
+        Tapping a name the phone already knows removes that failure entirely.
+      -->
+      <div id="recentWrap" hidden>
+        <span class="lbl">On this phone</span>
+        <div class="opts" id="recent"></div>
+      </div>
     </div>
 
     <div class="field">
@@ -349,13 +363,24 @@
     <div class="total" id="paedTotal"><span>PAED total</span><span>— / 20</span></div>
     <p class="note" id="paedVerdict"></p>
 
-    <div id="painPath" hidden>
-      <h3>Pain — score it, then treat it</h3>
+    <!--
+      The pain score sits outside both pathways and is always asked. Adjudicating
+      delirium says what is driving the distress; it does not tell you how much
+      pain the child is in, and a child can be delirious and sore at once. Hiding
+      the score behind the pain pathway lost it at exactly the high PAED totals
+      the adjudication exists to examine, and left the two groups impossible to
+      compare because only one of them could ever carry a score.
+    -->
+    <div id="pacuPainScore" hidden>
       <div class="field">
         <span class="lbl" id="pacuScaleLabel">Pain score</span>
         <div id="pacuScale"></div>
         <p class="note" id="pacuPainNote"></p>
       </div>
+    </div>
+
+    <div id="painPath" hidden>
+      <h3>Pain — treat it</h3>
 
       <div class="field">
         <span class="lbl">Rescue opioid</span>
@@ -412,6 +437,52 @@
   <section class="card mod" data-module="m4">
     <h2><span class="modno">Module 4</span> Ward pain assessment</h2>
     <p class="explain" id="m4Routing">Enter the child's age in Module 1 and the right scale is chosen for you.</p>
+
+    <!--
+      The prescription, not the administration. It sits above the timepoint tabs
+      because it belongs to the child rather than to one check, and it is what
+      gives "breakthrough" a denominator: a PRN dose means one thing against
+      six-hourly paracetamol and quite another against nothing prescribed.
+      Entered once, carried to every later timepoint, and written onto each ward
+      row so a prescription changed mid-stay reads as a change.
+    -->
+    <div class="field" id="wardRxBlock">
+      <!--
+        Answered once, then it gets out of the way. At T24 the nurse wants the
+        pain score, not a prescription form she already filled in at T2 — so it
+        collapses to one line she can reopen if the chart changed.
+      -->
+      <div id="wardRxSummary" hidden>
+        <span class="lbl">Regular analgesia</span>
+        <p class="note ok" id="wardRxSummaryText"></p>
+        <button class="linkish" id="wardRxEdit" type="button">change</button>
+      </div>
+
+      <div id="wardRxFull">
+        <span class="lbl">Regular analgesia prescribed <em>— what is on the drug chart, not what was given</em></span>
+        <div class="opts yn" id="wardRxNone"></div>
+        <div id="wardRxPicker">
+        <div class="field">
+          <span class="lbl">Drug</span>
+          <div class="opts" id="wardRxDrug"></div>
+        </div>
+        <div class="field" id="wardRxRouteField" hidden>
+          <span class="lbl">Route</span>
+          <div class="opts" id="wardRxRoute"></div>
+        </div>
+        <div class="field" id="wardRxDoseField" hidden>
+          <label for="wardRxDose">Dose <em id="wardRxUnit"></em></label>
+          <input id="wardRxDose" type="number" inputmode="decimal" step="0.5" min="0" max="2000">
+          <span class="lbl">How often</span>
+          <div class="opts" id="wardRxInterval"></div>
+          <button class="secondary" id="addWardRx" type="button">Add to the prescription</button>
+        </div>
+        </div>
+        <ul class="doses" id="wardRxList"></ul>
+        <p class="note" id="wardRxNote"></p>
+      </div>
+    </div>
+
     <div class="tabs" id="wardTabs"></div>
 
     <div class="summary" id="wardSoFar" hidden>

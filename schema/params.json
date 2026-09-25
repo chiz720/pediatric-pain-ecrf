@@ -106,7 +106,13 @@
   "wardAnalgesia": {
     "_note": "What is given on the ward, and whether it was on the prescription or given for breakthrough pain. The distinction is not cosmetic: breakthroughPain counts PRN rescue, so a scheduled six-hourly paracetamol must not be mistaken for one. Route names match the drug/route map in lib/scoring.js exactly, because morphine converts to a different morphine equivalent by mouth than by vein.",
     "types": ["Scheduled", "Rescue (PRN)"],
-    "routes": ["Oral", "IV", "Rectal"]
+    "routes": ["Oral", "IV", "Rectal"],
+    "prescription": {
+      "_note": "The regular analgesia written on the ward drug chart. Recorded because 'breakthrough' is meaningless without a denominator: a PRN dose means one thing against six-hourly paracetamol and quite another against nothing prescribed at all. It is captured once and carried forward to each later timepoint, but written onto every ward row rather than held once per child, so a prescription changed during the 48 hours shows up as a change instead of silently overwriting what was true earlier.",
+      "intervalsHours": [4, 6, 8, 12, 24],
+      "_intervalsBasis": "The regular intervals paracetamol, NSAIDs and oral opioids are written at in paediatric practice. Stored as hours so the interval is analysable rather than a label.",
+      "noneLabel": "No regular analgesia prescribed"
+    }
   },
 
   "pacuDelirium": {

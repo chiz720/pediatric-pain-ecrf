@@ -19,12 +19,15 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.25c-crf';
+const APP_VERSION = '2026.09.25d-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
 const SAVED_KEY = 'ppp.saved';
 const WARD_MEDS_KEY = 'ppp.wardmeds';
+const WARD_RX_KEY = 'ppp.wardrx';
+const RECENT_KEY = 'ppp.recent';
+const RECENT_MAX = 20;
 
 const $ = (id) => document.getElementById(id);
 const el = (tag, attrs = {}, ...kids) => {
@@ -203,17 +206,114 @@ function readSerial() {
   input.className = 'mono ok';
   note.className = 'note ok';
   ['m1', 'm2', 'm5'].forEach((mod) => markSaveButton(mod));
+  // Open on what is owed, not on the first tab. Opening a child at T2 who was
+  // last scored at T12 costs a decision every visit and invites a save against
+  // the wrong timepoint — and a ward round makes that decision thirty times.
+  selectNextTimepoints(studyNumber);
 
   if (freshlyAllocated.has(studyNumber)) {
     note.textContent = `${studyNumber} — new number. Write it on the paper form before the child leaves.`;
     loadWardMeds(studyNumber);
     drawWardSummary();
+    drawRecent();
     return;
   }
   note.textContent = studyNumber;
   loadWardMeds(studyNumber);
   drawWardSummary();
+  drawRecent();
   confirmAgainstWorkbook(studyNumber);
+}
+
+/* ---------------- children this phone has seen ---------------- */
+
+/**
+ * The short list that replaces typing four digits five times per child.
+ *
+ * Ordered by when the child was last touched on this phone, because a ward
+ * round works through the children in front of it and the one just seen is
+ * rarely the one wanted next. Capped, so the list stays a list and not a
+ * roster: it is a convenience for the phone holding it, never a claim about
+ * who is enrolled in the study.
+ */
+function recentList() {
+  try {
+    const all = JSON.parse(localStorage.getItem(RECENT_KEY) || '[]');
+    return Array.isArray(all) ? all.filter((r) => r && r.sn) : [];
+  } catch { return []; }
+}
+
+function rememberRecent(studyNumber) {
+  if (!studyNumber) return;
+  const list = recentList().filter((r) => r.sn !== studyNumber);
+  list.unshift({ sn: studyNumber, ts: Date.now() });
+  localStorage.setItem(RECENT_KEY, JSON.stringify(list.slice(0, RECENT_MAX)));
+  drawRecent();
+}
+
+function drawRecent() {
+  const wrap = $('recentWrap');
+  const box = $('recent');
+  if (!wrap || !box) return;
+  const list = recentList();
+  wrap.hidden = list.length === 0;
+  box.replaceChildren();
+
+  list.forEach(({ sn }) => {
+    // The next thing owed to this child, worked out from what this phone has
+    // saved, so the button says what it is for rather than only who it is.
+    const due = firstUnsavedWardTimepoint(sn);
+    const label = due ? `${sn.slice(-4)} · ${due.label}` : `${sn.slice(-4)} · done`;
+    box.append(el('button', {
+      type: 'button', class: sn === F.subjectId ? 'on' : '', text: label,
+      onclick: () => openRecent(sn),
+    }));
+  });
+}
+
+/** Open a child the phone already knows, without retyping the serial. */
+function openRecent(studyNumber) {
+  const seq = studyNumber.slice(-4);
+  $('subjectSeq').value = seq;
+  readSerial();
+  drawRecent();
+  document.querySelector('[data-module="m4"]')?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+}
+
+/**
+ * The first ward timepoint this phone has not saved for a child.
+ *
+ * Opening on T2 for a child already scored at T2, T6 and T12 costs a decision
+ * and invites a save against the wrong timepoint. Null once every timepoint has
+ * been recorded — there is nothing further owed.
+ */
+function firstUnsavedWardTimepoint(studyNumber) {
+  const tps = params().assessmentSchedule.timepoints;
+  return tps.find((tp) => !lastSavedUuid(studyNumber, 'm4', tp.id)) || null;
+}
+
+/** The same idea for the three PACU timepoints. */
+function firstUnsavedPaedTimepoint(studyNumber) {
+  const tps = params().paedSchedule.timepoints;
+  return tps.find((tp) => !lastSavedUuid(studyNumber, 'm3', tp.id)) || null;
+}
+
+/**
+ * Point both tab strips at the next thing owed.
+ *
+ * Nothing is blocked by this: a nurse typing up T6 from paper at midnight can
+ * still tap back to any timepoint, and a closed window never stops a late
+ * record. It only changes which tab is in front of her when the child opens.
+ */
+function selectNextTimepoints(studyNumber) {
+  const ward = firstUnsavedWardTimepoint(studyNumber);
+  if (ward) F.wardTab = ward.id;
+  const paed = firstUnsavedPaedTimepoint(studyNumber);
+  if (paed) F.paedTab = paed.id;
+  refreshWardTabs();
+  refreshPaedTabs();
+  drawWardScales();
+  drawPaedItems();
 }
 
 function enrolledHere() {
@@ -350,6 +450,7 @@ function buildModule1() {
     drawNonOpioids();      // and the non-opioids
     drawPacuPathways();    // and anything given in recovery
     drawWardMeds();        // and on the ward
+    drawWardRx();          // and what the ward prescribed per kilogram
   };
   $('weight').addEventListener('input', recalcBmi);
   $('height').addEventListener('input', recalcBmi);
@@ -1095,10 +1196,17 @@ function buildOpioids() {
 
 function drawDoses() {
   const list = $('doseList');
+  const weight = F.m1.weight_kg;
   list.replaceChildren();
   opioidLog.forEach((d, i) => {
+    // Every drug this form records shows what it came to per kilogram. An
+    // intraoperative opioid is the one most often checked against a reference
+    // range at the bedside — fentanyl in mcg/kg, morphine in mg/kg — so the
+    // figure belongs beside the dose rather than only inside the total.
+    const perKg = weight ? `${Math.round((d.amount / weight) * 1000) / 1000} ${d.unit}/kg` : 'needs weight';
     list.append(el('li', {},
       el('span', { text: `${d.drug} ${d.amount} ${d.unit}` }),
+      el('span', { class: 'muted', text: perKg }),
       el('button', {
         type: 'button', class: 'linkish', text: 'remove',
         onclick: () => { opioidLog.splice(i, 1); drawDoses(); },
@@ -1123,10 +1231,20 @@ function totalOpioids() {
   }
 
   // Rebuild every per-drug column so a removed dose cannot leave a stale total.
-  agents.forEach((a) => { delete F.m2[`opioid_${a.name.toLowerCase()}_${a.unit}`]; });
+  const weightNow = F.m1.weight_kg;
+  agents.forEach((a) => {
+    delete F.m2[`opioid_${a.name.toLowerCase()}_${a.unit}`];
+    delete F.m2[`opioid_${a.name.toLowerCase()}_per_kg`];
+  });
   for (const [drug, amount] of perDrug) {
     const agent = agents.find((a) => a.name === drug);
     F.m2[`opioid_${drug.toLowerCase()}_${agent.unit}`] = Math.round(amount * 1000) / 1000;
+    // The morphine equivalent per kilogram is the study endpoint, but it hides
+    // which drug delivered it. The per-agent figure is what makes a dosing
+    // outlier attributable to the agent that caused it.
+    if (weightNow) {
+      F.m2[`opioid_${drug.toLowerCase()}_per_kg`] = Math.round((amount / weightNow) * 1000) / 1000;
+    }
   }
 
   const given = [...perDrug].map(([drug, amount]) =>
@@ -1356,9 +1474,21 @@ function updatePacuPain() {
   store.pacu_pain_band = band;
   store.pacu_rescue_indicated = indicated;
 
-  if (indicated) {
+  // On the delirium pathway the rescue list is out of sight, so the wording
+  // must not tell the rater to fill in a list that is not there. A child can be
+  // delirious and sore at the same time; both get recorded, and what to do
+  // about it is a clinical judgement the form does not make.
+  const onDelirium = store.pacu_pathway === 'delirium';
+
+  if (indicated && onDelirium) {
+    note.className = 'note warn';
+    note.textContent = `${score}/10 — ${band} pain recorded alongside a delirium picture. Both are now on the record. Opioid escalation is not the answer to delirium, but this score says the child may also be in pain — treat on your judgement and record anything given under the delirium section.`;
+  } else if (indicated) {
     note.className = 'note warn';
     note.textContent = `${score}/10 — ${band} pain. At or above ${params().thresholds.moderateToSevere} rescue analgesia is indicated: record what was given below.`;
+  } else if (onDelirium) {
+    note.className = 'note ok';
+    note.textContent = `${score}/10 — ${band} pain. Below the treatment threshold, which is what separates this from pain-driven distress.`;
   } else {
     note.className = 'note ok';
     note.textContent = `${score}/10 — ${band} pain. Below the treatment threshold; no rescue indicated. Leaving the list empty records that decision.`;
@@ -1491,6 +1621,7 @@ function drawPacuPathways() {
   const verdict = $('paedVerdict');
 
   if (store.total == null) {
+    $('pacuPainScore').hidden = true;
     $('painPath').hidden = true;
     $('deliriumPath').hidden = true;
     verdict.textContent = '';
@@ -1507,14 +1638,21 @@ function drawPacuPathways() {
   verdict.textContent = message;
   verdict.className = `note ${pathway === 'delirium' ? 'warn' : pathway === 'pain' ? 'ok' : ''}`;
 
+  // The score is asked on every pathway; only the treatment that follows it
+  // branches. Opioid rescue stays out of sight for delirium because there the
+  // wrong answer is more opioid — but the child still has a pain score, and it
+  // is still an outcome.
+  $('pacuPainScore').hidden = false;
   $('painPath').hidden = pathway !== 'pain';
   $('deliriumPath').hidden = pathway !== 'delirium';
 
-  if (pathway === 'pain') {
-    $('pacuScaleLabel').textContent = `Pain score — ${toolName(routed ? routed.tool : null) || 'enter the age in Module 1'}`;
-    paintScale($('pacuScale'), store, 'pacu_pain', updatePacuPain);
-    updatePacuPain();
-  }
+  const tool = toolName(routed ? routed.tool : null) || 'enter the age in Module 1';
+  $('pacuScaleLabel').textContent = pathway === 'delirium'
+    ? `Pain score — ${tool} · score it even though this looks like delirium`
+    : `Pain score — ${tool}`;
+  paintScale($('pacuScale'), store, 'pacu_pain', updatePacuPain);
+  updatePacuPain();
+
   if (pathway === 'delirium') drawDelirium();
 }
 
@@ -1585,6 +1723,7 @@ function buildModule4() {
     drawWardMeds();
   });
   buildWardMeds();
+  buildWardRx();
   drawWardScales();
 }
 
@@ -1626,6 +1765,7 @@ function loadWardMeds(studyNumber) {
     const all = JSON.parse(localStorage.getItem(WARD_MEDS_KEY) || '{}');
     wardMedLog = all[studyNumber] || {};
   } catch { wardMedLog = {}; }
+  loadWardRx(studyNumber);
 }
 
 function saveWardMeds() {
@@ -1634,6 +1774,205 @@ function saveWardMeds() {
   try { all = JSON.parse(localStorage.getItem(WARD_MEDS_KEY) || '{}'); } catch { all = {}; }
   all[F.subjectId] = wardMedLog;
   localStorage.setItem(WARD_MEDS_KEY, JSON.stringify(all));
+}
+
+/* ---------------- ward prescription ---------------- */
+
+/**
+ * The regular analgesia on the drug chart.
+ *
+ * Belongs to the child, not to a timepoint: the nurse at T24 should read what
+ * was prescribed at admission rather than type it again. Kept per study number
+ * on the phone for the same reason the ward med log is, and written onto every
+ * ward row so a prescription changed during the stay reads as a change instead
+ * of silently rewriting what was true at T2.
+ */
+let wardRxLog = [];
+let wardRxNone = null;
+let wardRxEditing = false;
+
+function loadWardRx(studyNumber) {
+  try {
+    const all = JSON.parse(localStorage.getItem(WARD_RX_KEY) || '{}');
+    const saved = all[studyNumber] || {};
+    wardRxLog = saved.log || [];
+    wardRxNone = saved.none ?? null;
+  } catch { wardRxLog = []; wardRxNone = null; }
+  wardRxEditing = false;
+  drawWardRx();
+}
+
+function saveWardRx() {
+  if (!F.subjectId) return;
+  let all = {};
+  try { all = JSON.parse(localStorage.getItem(WARD_RX_KEY) || '{}'); } catch { all = {}; }
+  all[F.subjectId] = { log: wardRxLog, none: wardRxNone };
+  localStorage.setItem(WARD_RX_KEY, JSON.stringify(all));
+}
+
+function buildWardRx() {
+  const { routes, prescription } = params().wardAnalgesia;
+  const opioids = params().opioids.intraoperative.agents;
+  const nonOpioids = params().nonOpioids.agents;
+  const agents = [
+    ...nonOpioids.map((a) => ({ ...a, opioid: false })),
+    ...opioids.map((a) => ({ ...a, opioid: true })),
+  ];
+  let picked = null;
+  let route = null;
+  let interval = null;
+
+  drawWardRxNone();
+
+  $('wardRxEdit').addEventListener('click', () => {
+    wardRxEditing = true;
+    drawWardRx();
+  });
+
+  optionRow('wardRxDrug', agents.map((a) => ({ label: a.name, value: a.name })), (name) => {
+    picked = agents.find((a) => a.name === name) || null;
+    route = null;
+    interval = null;
+    $('wardRxUnit').textContent = picked ? `(${picked.unit})` : '';
+    $('wardRxRouteField').hidden = !picked;
+    $('wardRxDoseField').hidden = true;
+    optionRow('wardRxRoute', routes, (r) => {
+      route = r;
+      $('wardRxDose').value = '';
+      $('wardRxDoseField').hidden = false;
+    });
+  });
+
+  optionRow('wardRxInterval',
+    prescription.intervalsHours.map((h) => ({ label: h === 24 ? 'Once daily' : `${h}-hourly`, value: h })),
+    (h) => { interval = Number(h); });
+
+  $('addWardRx').addEventListener('click', () => {
+    const amount = num('wardRxDose');
+    if (!picked) { toast('Pick the drug first'); return; }
+    if (!route) { toast('Which route?'); return; }
+    if (amount == null || !(amount > 0)) { toast('Type the prescribed dose'); return; }
+    if (interval == null) { toast('How often is it prescribed?'); return; }
+    wardRxLog.push({
+      drug: picked.name, route, amount, unit: picked.unit,
+      intervalH: interval, opioid: picked.opioid,
+    });
+    $('wardRxDose').value = '';
+    wardRxNone = 0;
+    wardRxEditing = true;
+    saveWardRx();
+    drawWardRx();
+  });
+}
+
+const intervalLabel = (h) => (h === 24 ? 'once daily' : `${h}-hourly`);
+
+/**
+ * "None prescribed" is a finding, not an empty field.
+ *
+ * A child on no regular analgesia is exactly the case the breakthrough endpoint
+ * needs to identify, and a blank cannot be told apart from a form nobody got to.
+ * Redrawn rather than wired once, so a prescription read back off this phone at
+ * T24 shows the answer that was given at T2 already selected.
+ */
+function drawWardRxNone() {
+  const { noneLabel } = params().wardAnalgesia.prescription;
+  optionRow('wardRxNone', [
+    { label: 'Something is prescribed', value: 0 },
+    { label: noneLabel, value: 1 },
+  ], (v) => {
+    wardRxNone = v;
+    // Touching the block means she is working in it — it stays open until a
+    // different child is opened, so adding a second drug needs no extra tap.
+    wardRxEditing = true;
+    saveWardRx();
+    drawWardRx();
+  }, wardRxNone);
+}
+
+function drawWardRx() {
+  const list = $('wardRxList');
+  if (!list) return;
+  const weight = F.m1.weight_kg;
+  list.replaceChildren();
+
+  wardRxLog.forEach((d, i) => {
+    const perKg = weight
+      ? `${Math.round((d.amount / weight) * 1000) / 1000} ${d.unit}/kg`
+      : 'needs weight';
+    list.append(el('li', {},
+      el('span', { text: `${d.drug} ${d.route} ${d.amount} ${d.unit} ${intervalLabel(d.intervalH)}` }),
+      el('span', { class: 'muted', text: perKg }),
+      el('button', {
+        type: 'button', class: 'linkish', text: 'remove',
+        onclick: () => { wardRxLog.splice(i, 1); saveWardRx(); drawWardRx(); },
+      })));
+  });
+
+  if ($('wardRxPicker')) $('wardRxPicker').hidden = wardRxNone === 1;
+  drawWardRxNone();
+  collapseWardRx();
+
+  const note = $('wardRxNote');
+  if (wardRxNone === 1) {
+    note.className = 'note warn';
+    note.textContent = 'No regular analgesia prescribed. Recorded as a finding — every dose on the ward will count as breakthrough.';
+  } else if (!wardRxLog.length) {
+    note.className = 'note';
+    note.textContent = 'What is written up regularly on the chart, with how often. Entered once; it carries to every later timepoint.';
+  } else if (!weight) {
+    note.className = 'note warn';
+    note.textContent = 'Enter the weight in Module 1 to get these per kilogram.';
+  } else {
+    note.className = 'note ok';
+    note.textContent = `${wardRxLog.length} regular ${wardRxLog.length === 1 ? 'drug' : 'drugs'} prescribed.`;
+  }
+}
+
+/**
+ * Once it is answered, the prescription folds to a line.
+ *
+ * It is a per-child fact sitting on a per-timepoint screen, so after the first
+ * visit it is in the way of the thing the nurse actually came to do. Reopened
+ * by tapping "change", which is also what she needs when the chart is rewritten
+ * mid-stay — and because the answer is written onto every ward row, that
+ * rewrite reads as a change at the timepoint it happened.
+ */
+function collapseWardRx() {
+  const summary = $('wardRxSummary');
+  const full = $('wardRxFull');
+  if (!summary || !full) return;
+
+  const answered = wardRxNone === 1 || wardRxLog.length > 0;
+  const show = answered && !wardRxEditing;
+
+  summary.hidden = !show;
+  full.hidden = show;
+
+  if (show) {
+    $('wardRxSummaryText').textContent = wardRxNone === 1
+      ? params().wardAnalgesia.prescription.noneLabel
+      : wardRxLog.map((d) => `${d.drug} ${d.amount} ${d.unit} ${intervalLabel(d.intervalH)}`).join(' · ');
+  }
+}
+
+/** The prescription, flattened onto whichever ward row is being saved. */
+function wardRxColumns() {
+  const weight = F.m1.weight_kg;
+  const out = {
+    rx_none: wardRxNone == null ? null : wardRxNone,
+    rx_drug_count: wardRxNone === 1 ? 0 : wardRxLog.length,
+    rx_regimen: wardRxLog.length
+      ? wardRxLog.map((d) => `${d.drug} ${d.route} ${d.amount} ${d.unit} ${intervalLabel(d.intervalH)}`).join('; ')
+      : null,
+  };
+  for (const d of wardRxLog) {
+    const key = `${d.drug.toLowerCase()}_${d.route.toLowerCase()}`;
+    out[`rx_${key}_${d.unit}`] = d.amount;
+    out[`rx_${key}_interval_h`] = d.intervalH;
+    if (weight) out[`rx_${key}_per_kg`] = Math.round((d.amount / weight) * 1000) / 1000;
+  }
+  return out;
 }
 
 function buildWardMeds() {
@@ -2094,6 +2433,10 @@ async function saveModule(mod) {
       prn_mme_mg: w.prn_mme_mg ?? null,
       mme_per_kg: w.mme_per_kg ?? null,
       mme_excluded: w.mme_excluded ?? null,
+      // The prescription rides on every ward row. It is the same answer each
+      // time unless the chart changed, and if it did, the change is visible
+      // against the timepoint it happened at rather than overwriting history.
+      ...wardRxColumns(),
     };
   }
   if (mod === 'm5') data = { ...header, ...F.m5 };
@@ -2105,6 +2448,7 @@ async function saveModule(mod) {
     form: SHEETS[mod], studyNumber: F.subjectId, timepoint, data, supersedes,
   });
   rememberSaved(F.subjectId, mod, timepoint, record.uuid);
+  rememberRecent(F.subjectId);
   btn.disabled = false;
   markSaveButton(mod, timepoint);
 
