@@ -19,7 +19,7 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.25j-crf';
+const APP_VERSION = '2026.09.25k-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -886,10 +886,14 @@ function buildModule2() {
   $('blockName').addEventListener('input', () => {
     F.m2.block = $('blockName').value.trim() || null;
     $('blockDetail').hidden = !F.m2.block;
+    // Clearing the block name means there was no block, so a placement time
+    // left behind from a mistyped entry would assert one that never happened.
+    if (!F.m2.block) $('blockTime').value = '';
+    updateTimes();
     updateLaDose();
   });
 
-  ['anaesStart', 'anaesEnd', 'surgStart', 'surgEnd'].forEach((id) => {
+  ['anaesStart', 'anaesEnd', 'surgStart', 'surgEnd', 'blockTime'].forEach((id) => {
     const input = $(id);
     input.addEventListener('input', updateTimes);
     // Tapping the field asks the browser for its own time picker. Chrome and
@@ -1440,12 +1444,16 @@ function updateTimes() {
     anaesEnd: $('anaesEnd').value,
     surgStart: $('surgStart').value,
     surgEnd: $('surgEnd').value,
+    blockTime: $('blockTime').value,
   };
   Object.assign(F.m2, {
     anaes_start: times.anaesStart || null,
     anaes_end: times.anaesEnd || null,
     surg_start: times.surgStart || null,
     surg_end: times.surgEnd || null,
+    // The anchor for rebound_barry. Null when no block was done, which is the
+    // right answer rather than a gap: there is no placement to time.
+    block_time: times.blockTime || null,
   });
 
   const anaes = minutesBetween(times.anaesStart, times.anaesEnd);

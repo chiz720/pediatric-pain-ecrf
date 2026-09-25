@@ -333,6 +333,22 @@
     </div>
 
     <div id="blockDetail" hidden>
+      <!--
+        Not bookkeeping: block_placement is the anchor of the Barry rebound
+        definition, which is reported alongside the protocol one for external
+        comparability. Without this time that endpoint cannot be computed at
+        all, and it cannot be recovered afterwards from anything else the form
+        holds. Asked only once a block has been named.
+      -->
+      <div class="field">
+        <label for="blockTime">Time the block was placed</label>
+        <div class="timerow">
+          <input id="blockTime" type="time">
+          <button type="button" class="nowbtn" data-now="blockTime">Now</button>
+        </div>
+        <p class="note">Anchors the rebound window — record it when the block goes in.</p>
+      </div>
+
       <div class="grid2">
         <div class="field">
           <span class="lbl">Guidance</span>
