@@ -19,7 +19,7 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.25h-crf';
+const APP_VERSION = '2026.09.25i-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -884,8 +884,6 @@ function buildModule2() {
     $('blockDetail').hidden = !F.m2.block;
     updateLaDose();
   });
-
-  $('incision').addEventListener('input', () => { F.m2.incision = num('incision'); });
 
   ['anaesStart', 'anaesEnd', 'surgStart', 'surgEnd'].forEach((id) => {
     const input = $(id);
