@@ -19,7 +19,7 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.25f-crf';
+const APP_VERSION = '2026.09.25g-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -752,11 +752,38 @@ function updateMypas() {
     note.textContent = `${missing} domain${missing === 1 ? '' : 's'} still to pick.`;
     return;
   }
-  F.m1.mypas_sf = mypasSfScore(domains);
-  out.textContent = `${F.m1.mypas_sf} / 100`;
-  note.className = 'note ok';
-  note.textContent = 'Worked out from the four picks. 22.92 is the floor — a completely calm child.';
+  const score = mypasSfScore(domains);
+  F.m1.mypas_sf = score;
+  out.textContent = `${score} / 100`;
+
+  // The note used to describe the floor whatever the score was, so a frantic
+  // child at 85 was still reported as "a completely calm child". Read the score
+  // instead, against the published cutoff that was already in params and until
+  // now was used nowhere.
+  const cutoff = params().thresholds.mypasSfCutoff;
+  if (score >= cutoff) {
+    note.className = 'note warn';
+    note.textContent = `${score} — at or above the cutoff of ${cutoff}: clinically significant preoperative anxiety.`;
+  } else if (score === MYPAS_FLOOR) {
+    note.className = 'note ok';
+    note.textContent = `${score} is the floor of the scale — a completely calm child. Below the cutoff of ${cutoff}.`;
+  } else {
+    note.className = 'note ok';
+    note.textContent = `${score} — below the cutoff of ${cutoff}.`;
+  }
 }
+
+/**
+ * The lowest score the instrument can produce, computed rather than typed.
+ *
+ * Every domain scores from 1, so a completely calm child cannot score zero: the
+ * floor is the mean of 1/max across the four domains. Derived here so that if a
+ * domain's range ever changes the floor moves with it instead of the screen
+ * quietly asserting a number the scale no longer has.
+ */
+const MYPAS_FLOOR = mypasSfScore(
+  Object.fromEntries(MYPAS.map(([key]) => [key, 1])),
+);
 
 const DOB_HINT = 'Works out the age. Stays on this phone — it is never saved or sent.';
 

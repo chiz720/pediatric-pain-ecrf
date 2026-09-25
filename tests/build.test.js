@@ -52,6 +52,53 @@ test('the camp key in the endpoint matches the one the app sends', () => {
 });
 
 /*
+ * A protocol threshold nothing reads is a rule the study is not applying.
+ *
+ * mypasSfCutoff sat in params with a published source — Kain 1997, Jenkins
+ * 2014 — and was consumed by no code at all, so the m-YPAS screen described
+ * every child it scored as "a completely calm child" whatever the number said.
+ * The parameter looked enforced because it was written down.
+ *
+ * Each exemption below names why that threshold is not wired yet. Deleting a
+ * line from it is how the derived layer, the calibration module or a UMSS
+ * screen announce themselves; adding one needs a reason that is about scope,
+ * not about convenience.
+ */
+const THRESHOLDS_NOT_YET_CONSUMED = {
+  paedEdCutoffSensitivity: 'sensitivity analysis — belongs to the unbuilt _derived layer',
+  umssOversedation: 'UMSS is not an instrument the five-module form captures',
+  irrKappaGate: 'inter-rater reliability — belongs to the unbuilt calibration module',
+  clusterMinProportion: 'trajectory clustering — analysis, not collection',
+  wellControlled: 'superseded by painBands, which painBand() reads instead',
+  severePain: 'superseded by painBands.severe, which painBand() reads instead',
+};
+
+test('every protocol threshold is either consumed by the app or exempted with a reason', () => {
+  const params = JSON.parse(read('schema/params.json'));
+  const code = ['crf.js', 'apps-script/Code.gs',
+    'lib/scoring.js', 'lib/routing.js', 'lib/validate.js', 'lib/derive.js']
+    .map((f) => { try { return read(f); } catch { return ''; } })
+    .join('\n');
+
+  const thresholds = Object.keys(params.thresholds)
+    .filter((k) => !k.startsWith('_') && !k.endsWith('Source'));
+
+  const dead = thresholds.filter(
+    (k) => !code.includes(k) && !(k in THRESHOLDS_NOT_YET_CONSUMED),
+  );
+  assert.deepEqual(dead, [],
+    `Threshold(s) defined in params but read by nothing: ${dead.join(', ')}. `
+    + 'Either wire it up or add it to THRESHOLDS_NOT_YET_CONSUMED with the reason.');
+
+  // An exemption that has since been wired up is stale bookkeeping, and stale
+  // bookkeeping is how the list stops being read.
+  const stale = Object.keys(THRESHOLDS_NOT_YET_CONSUMED).filter((k) => code.includes(k));
+  assert.deepEqual(stale, [],
+    `Threshold(s) listed as not-yet-consumed but now used in code: ${stale.join(', ')}. `
+    + 'Remove them from THRESHOLDS_NOT_YET_CONSUMED.');
+});
+
+/*
  * Every element the app reaches for has to be in the page.
  *
  * $('someId') on a missing element returns null, and the next property access
