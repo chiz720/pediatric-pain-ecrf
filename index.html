@@ -215,9 +215,15 @@
 
     <div class="field" id="procedureField" hidden>
       <label for="procedure">Specific operation</label>
+      <!--
+        No side in the example. Side is the next question, and a laterality
+        typed here as well can disagree with the one picked below — at which
+        point neither can be trusted and only the picked one is analysable,
+        because free text is not.
+      -->
       <input id="procedure" type="text" autocomplete="off"
-             placeholder="e.g. right inguinal herniotomy">
-      <p class="note">As written on the operation note. The operation only — no names.</p>
+             placeholder="e.g. inguinal herniotomy">
+      <p class="note">As written on the operation note. The operation only — no names, and no side: that is the next question.</p>
 
       <div class="field" style="margin: 14px 0 0">
         <span class="lbl">Side</span>
