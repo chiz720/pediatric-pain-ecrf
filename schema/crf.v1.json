@@ -2,7 +2,7 @@
   "schemaVersion": "1.0.0",
   "title": "Prospective Perioperative Pediatric Pain Assessment — eCRF",
   "generated": "2026-09-11",
-  "paramsVersion": "1.11.0",
+  "paramsVersion": "1.12.0",
   "provenanceColumns": [
     "submission_uuid", "supersedes_uuid", "study_number", "rater_id", "device_id",
     "client_ts", "server_ts", "schema_version", "app_version", "params_version", "training"
@@ -173,7 +173,7 @@
           { "id": "bmi", "label": "BMI", "type": "computed", "derive": "bmi", "unit": "kg/m2", "readOnly": true }
         ]},
         { "id": "clinical", "title": "Clinical status", "items": [
-          { "id": "asa", "label": "ASA physical status", "type": "select", "required": true, "options": ["I", "II", "III"] },
+          { "id": "asa", "label": "ASA physical status", "type": "select", "required": true, "options": ["I", "II", "III", "IV"] },
           { "id": "diagnosis_icd11", "label": "Surgical diagnosis (ICD-11 code)", "type": "text", "required": true },
           { "id": "diagnosis_detail", "label": "Diagnosis detail", "type": "textarea", "required": false, "freeText": true,
             "help": "No names, no hospital numbers, no bed numbers." },

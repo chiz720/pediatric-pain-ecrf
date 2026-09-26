@@ -1,6 +1,6 @@
 {
-  "paramsVersion": "1.11.0",
-  "lastReviewed": "2026-09-25",
+  "paramsVersion": "1.12.0",
+  "lastReviewed": "2026-09-26",
   "countersignedBy": null,
   "countersignedOn": null,
   "_note": "Every value here is a protocol parameter with a published source. Changing any of them changes a study endpoint. Bump paramsVersion, record the countersignature, and never edit mid-camp.",
@@ -428,7 +428,8 @@
     "asa": [
       "ASA I",
       "ASA II",
-      "ASA III"
+      "ASA III",
+      "ASA IV"
     ],
     "laterality": [
       "Right",
