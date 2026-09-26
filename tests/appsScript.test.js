@@ -315,20 +315,29 @@ test('allocation refuses a centre it cannot put in a study number', () => {
   assert.equal(post(sandbox, { token: 'WRONG', mode: 'allocate', centre: 'CH' }).error, 'unauthorised');
 });
 
-test('the endpoint does three things: accept writes, report health, answer "is this serial used?"', () => {
-  // No roster, no read-back of study data. The form is one document per child,
-  // so nothing needs to fetch a list — and an endpoint that cannot read out
-  // cannot leak on a GET. The enrolment check is the one exception and it
-  // returns a boolean about a number the caller already holds.
+test('the endpoint reads out completion and nothing else', () => {
+  // This test used to assert that no roster existed at all, on the reasoning
+  // that an endpoint which cannot read out cannot leak on a GET. That was the
+  // safest possible position and it was abandoned deliberately, because it
+  // made a ward round unworkable: several phones cover one round, none could
+  // see the others, and a timepoint somebody had already scored was
+  // indistinguishable from one nobody had.
+  //
+  // The guarantee that replaces "reads out nothing" is "reads out no content".
+  // The roster answers with study numbers and which modules and timepoints
+  // exist; the enrolment check answers one boolean about a number the caller
+  // already holds; everything else is still refused.
   const { sandbox } = loadEndpoint();
-  assert.equal(typeof sandbox.roster, 'undefined');
-  assert.equal(typeof sandbox.cachedRoster, 'undefined');
-  assert.equal(get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN' }).error, 'unknown_mode');
   assert.equal(get(sandbox, { mode: 'anything', token: 'CAMP-2026-KN' }).error, 'unknown_mode');
   assert.deepEqual(
     Object.keys(get(sandbox, { mode: 'check', token: 'CAMP-2026-KN', sn: 'PPP-CH-0031' })).sort(),
     ['enrolled', 'ok'],
   );
+
+  const roster = get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN' });
+  assert.equal(roster.ok, true);
+  assert.deepEqual(Object.keys(roster).sort(),
+    ['centre', 'children', 'count', 'ok', 'serverTs', 'truncated']);
 });
 
 /* ---------------- three centres, one serial each ---------------- */
@@ -406,4 +415,91 @@ test('the endpoint needs no configuration run before it works', () => {
   const res = post(sandbox, envelope([obs('first-ever')]));
   assert.deepEqual(res.accepted, ['first-ever']);
   assert.ok(ss.getSheetByName('05_pain_obs'), 'the sheet created itself on first write');
+});
+
+/* ---------------- roster ---------------- */
+
+const rosterBaseline = (uuid, sn, data = {}) => ({
+  uuid, form: '01_baseline', studyNumber: sn,
+  clientTs: '2026-09-11T10:00:00Z', training: false,
+  data: { age_months: 48, weight_kg: 15, ...data },
+});
+
+const rosterWard = (uuid, sn, tp) => ({
+  uuid, form: '04_ward_pain', studyNumber: sn, timepoint: tp,
+  clientTs: '2026-09-11T10:00:00Z', training: false,
+  data: { rest_pain: 2 },
+});
+
+test('the roster is refused without the camp key', () => {
+  const { sandbox } = loadEndpoint();
+  const res = get(sandbox, { mode: 'roster', token: 'WRONG' });
+  assert.equal(res.ok, false);
+  assert.equal(res.error, 'unauthorised');
+});
+
+test('the roster reports which modules and timepoints a child has', () => {
+  const { sandbox } = loadEndpoint();
+  post(sandbox, envelope([rosterBaseline('b1', 'PPP-CH-0001')]));
+  post(sandbox, envelope([rosterWard('w1', 'PPP-CH-0001', 'T2')]));
+  post(sandbox, envelope([rosterWard('w2', 'PPP-CH-0001', 'T6')]));
+
+  const res = get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN' });
+  assert.equal(res.ok, true);
+  const child = res.children.find((c) => c.sn === 'PPP-CH-0001');
+  assert.equal(child.m1, true);
+  assert.deepEqual(child.m4.sort(), ['T2', 'T6']);
+  // The whole point: a timepoint nobody recorded must not appear, or a real
+  // gap becomes invisible and the round skips a child who was never scored.
+  assert.ok(!child.m4.includes('T12'));
+});
+
+test('the roster carries completion and never content', () => {
+  const { sandbox } = loadEndpoint();
+  post(sandbox, envelope([rosterBaseline('b1', 'PPP-CH-0001', {
+    hospital_number: '123456', weight_kg: 15, mypas_sf: 56.25,
+  })]));
+
+  const res = get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN' });
+  const text = JSON.stringify(res);
+  // Not merely absent from the shape we expect — absent from the bytes.
+  assert.ok(!text.includes('123456'), 'a hospital number reached the roster');
+  assert.ok(!text.includes('hospital_number'), 'an identifier field name reached the roster');
+  assert.ok(!text.includes('56.25'), 'a clinical value reached the roster');
+  assert.deepEqual(Object.keys(res.children[0]).sort(), ['m1', 'sn']);
+});
+
+test('one centre cannot read another centre roster', () => {
+  const { sandbox } = loadEndpoint();
+  post(sandbox, envelope([rosterBaseline('b1', 'PPP-CH-0001')]));
+  post(sandbox, envelope([rosterBaseline('b2', 'PPP-ME-0001')]));
+
+  const res = get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN', centre: 'CH' });
+  assert.deepEqual(res.children.map((c) => c.sn), ['PPP-CH-0001']);
+  assert.equal(res.centre, 'CH');
+});
+
+test('a malformed centre is refused rather than silently ignored', () => {
+  const { sandbox } = loadEndpoint();
+  const res = get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN', centre: 'CHUKA' });
+  assert.equal(res.ok, false);
+  assert.equal(res.error, 'bad_centre');
+});
+
+test('an empty workbook answers with an empty roster, not an error', () => {
+  const { sandbox } = loadEndpoint();
+  const res = get(sandbox, { mode: 'roster', token: 'CAMP-2026-KN' });
+  assert.equal(res.ok, true);
+  assert.deepEqual(res.children, []);
+});
+
+test('the identifier guard refuses a payload rather than trusting the builder', () => {
+  const { sandbox } = loadEndpoint();
+  // Reach past the roster and call the guard directly with something it must
+  // never emit. The column-level care in roster() is a promise about code
+  // somebody will edit later; this is the check that survives that edit.
+  const bad = sandbox.scrub({ ok: true, children: [{ sn: 'PPP-CH-0001', hospital_number: '1' }] });
+  assert.equal(bad.ok, false);
+  assert.equal(bad.error, 'identifier_in_payload');
+  assert.equal(bad.field, 'hospital_number');
 });

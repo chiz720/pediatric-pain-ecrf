@@ -120,6 +120,14 @@
       if (!tokenValid(p.token)) return json({ ok: false, error: 'unauthorised' });
       return json({ ok: true, enrolled: hasBaseline(p.sn) });
     }
+    // Who exists and what has been recorded — completion only, never content.
+    // A ward round runs on several phones and none of them can see the others;
+    // this is the only thing that lets one know what another already did.
+    if (mode === 'roster') {
+      var rp = e.parameter || {};
+      if (!tokenValid(rp.token)) return json({ ok: false, error: 'unauthorised' });
+      return json(roster(SpreadsheetApp.getActiveSpreadsheet(), rp.centre));
+    }
     // A POST diverted here by a cached redirect lands with no mode. Say so
     // explicitly rather than returning something a client could mistake for an
     // acknowledgement.
@@ -334,6 +342,105 @@
   }
 
   /* ---------------- roster ---------------- */
+
+  /**
+  * Which children exist, and what has been recorded for each. Nothing else.
+  *
+  * The problem it solves is that a ward round is worked on several phones and
+  * none of them can see the others. A child scored at T6 by one nurse reads as
+  * still due to the next, who scores it again — a duplicate the study resolves
+  * by supersedes but would rather not have, and worse, a real gap looks
+  * identical to a timepoint somebody else already covered.
+  *
+  * It answers with study numbers and completion only: which modules are in,
+  * which timepoints of the repeating ones are in. No score, no drug, no date,
+  * and above all no hospital number. That is enforced twice — this reads only
+  * the study_number and timepoint columns and never asks a sheet for anything
+  * else, and scrub() then refuses to emit a payload containing a forbidden key
+  * at all. The second check exists because the first is a promise about code
+  * that someone will later edit.
+  *
+  * Scoped to one centre because a phone at Chuka has no business holding
+  * Meru's roster, and capped because an unbounded list is a slow request on a
+  * camp phone and an accident waiting to happen on a big workbook.
+  */
+  var ROSTER_MAX = 500;
+
+  var ROSTER_FORMS = [
+    { sheet: '01_baseline',  key: 'm1', repeating: false },
+    { sheet: '02_intraop',   key: 'm2', repeating: false },
+    { sheet: '03_paed',      key: 'm3', repeating: true  },
+    { sheet: '04_ward_pain', key: 'm4', repeating: true  },
+    { sheet: '05_recovery',  key: 'm5', repeating: false },
+  ];
+
+  function roster(ss, centre) {
+    var wanted = String(centre || '').toUpperCase();
+    if (wanted && !/^[A-Z]{2}$/.test(wanted)) return { ok: false, error: 'bad_centre' };
+    var prefix = wanted ? 'PPP-' + wanted + '-' : null;
+
+    var byChild = {};
+    ROSTER_FORMS.forEach(function (form) {
+      var sheet = ss.getSheetByName(form.sheet);
+      if (!sheet || sheet.getLastRow() < 2) return;
+
+      var headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+      var snCol = headers.indexOf('study_number') + 1;
+      if (snCol === 0) return;
+      var tpCol = headers.indexOf('timepoint') + 1;
+
+      var n = sheet.getLastRow() - 1;
+      var sns = sheet.getRange(2, snCol, n, 1).getValues();
+      var tps = (form.repeating && tpCol > 0) ? sheet.getRange(2, tpCol, n, 1).getValues() : null;
+
+      for (var i = 0; i < n; i++) {
+        var sn = String(sns[i][0] || '').toUpperCase();
+        if (!sn) continue;
+        if (prefix && sn.indexOf(prefix) !== 0) continue;
+
+        var child = byChild[sn] || (byChild[sn] = { sn: sn });
+        if (!form.repeating) {
+          child[form.key] = true;
+        } else {
+          var tp = tps ? String(tps[i][0] || '') : '';
+          if (!tp) continue;
+          if (!child[form.key]) child[form.key] = [];
+          if (child[form.key].indexOf(tp) === -1) child[form.key].push(tp);
+        }
+      }
+    });
+
+    var children = Object.keys(byChild).sort().map(function (sn) { return byChild[sn]; });
+    var truncated = children.length > ROSTER_MAX;
+
+    return scrub({
+      ok: true,
+      serverTs: new Date().toISOString(),
+      centre: wanted || null,
+      count: children.length,
+      truncated: truncated,
+      children: truncated ? children.slice(0, ROSTER_MAX) : children,
+    });
+  }
+
+  /**
+  * Refuse to emit anything carrying an identifier, whatever built it.
+  *
+  * NEVER_RETURN was declared long before anything could return data, which
+  * made it a comment with a variable name. This is what turns it into a rule:
+  * a later edit that widens the roster to "just also include the weight" and
+  * sweeps up a hospital number with it fails loudly here instead of quietly
+  * publishing one.
+  */
+  function scrub(payload) {
+    var seen = JSON.stringify(payload);
+    for (var i = 0; i < NEVER_RETURN.length; i++) {
+      if (seen.indexOf('"' + NEVER_RETURN[i] + '"') !== -1) {
+        return { ok: false, error: 'identifier_in_payload', field: NEVER_RETURN[i] };
+      }
+    }
+    return payload;
+  }
 
   /* ---------------- audit ---------------- */
 

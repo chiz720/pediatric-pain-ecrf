@@ -19,7 +19,7 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.26b-crf';
+const APP_VERSION = '2026.09.26c-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -295,7 +295,7 @@ function openRecent(studyNumber) {
  */
 function firstUnsavedWardTimepoint(studyNumber) {
   const tps = params().assessmentSchedule.timepoints;
-  return tps.find((tp) => !lastSavedUuid(studyNumber, 'm4', tp.id)) || null;
+  return tps.find((tp) => !wardDone(studyNumber, tp.id)) || null;
 }
 
 /** The same idea for the three PACU timepoints. */
@@ -585,11 +585,56 @@ function drawCumulative() {
  */
 const round = { tp: null };
 
+/**
+ * What the workbook says, as opposed to what this phone remembers.
+ *
+ * Keyed by study number, each value the roster row for that child. Null until
+ * a roster has been fetched successfully, and it stays null when the request
+ * fails — an empty roster and an unreachable one mean opposite things, and
+ * showing "everyone is due" because the signal dropped would send a nurse
+ * round a ward that had already been done.
+ */
+let rosterByChild = null;
+let rosterFetchedAt = 0;
+
+/** How stale the roster is, in words a tired person reads correctly. */
+function agoLabel(at) {
+  const s = Math.max(0, Math.round((Date.now() - at) / 1000));
+  if (s < 45) return 'just now';
+  const m = Math.round(s / 60);
+  if (m < 60) return `${m} min ago`;
+  const h = Math.round(m / 60);
+  return `${h} h ago`;
+}
+
+async function refreshRoster() {
+  const body = await sync.fetchRoster(centre ? centre.code : null);
+  if (!body) return;            // unknown, not empty — keep what we had
+  rosterByChild = Object.fromEntries(body.children.map((c) => [c.sn, c]));
+  rosterFetchedAt = Date.now();
+  drawRound();
+  drawRecent();
+}
+
+/**
+ * Has this timepoint been recorded for this child, anywhere?
+ *
+ * Server first, because it sees every phone. Falling back to what this device
+ * saved means an offline round still works and still ticks off its own work;
+ * it simply cannot see anyone else's until the signal returns.
+ */
+function wardDone(studyNumber, tp) {
+  const fromServer = rosterByChild?.[studyNumber];
+  if (fromServer) return Array.isArray(fromServer.m4) && fromServer.m4.includes(tp);
+  return Boolean(lastSavedUuid(studyNumber, 'm4', tp));
+}
+
 function buildRound() {
   $('roundStart').addEventListener('click', () => {
     $('roundBody').hidden = false;
     $('roundStart').hidden = true;
     drawRound();
+    refreshRoster();            // best effort; the list works without it
   });
 
   $('roundExit').addEventListener('click', () => {
@@ -601,7 +646,7 @@ function buildRound() {
 
   optionRow('roundTp',
     params().assessmentSchedule.timepoints.map((tp) => ({ label: tp.label, value: tp.id })),
-    (id) => { round.tp = id; drawRound(); });
+    (id) => { round.tp = id; drawRound(); refreshRoster(); });
 }
 
 function drawRound() {
@@ -614,12 +659,19 @@ function drawRound() {
   if (!round.tp) return;
 
   const tp = params().assessmentSchedule.timepoints.find((t) => t.id === round.tp);
-  const children = recentList();
+  // Children this phone has touched, plus any the workbook knows about for
+  // this centre. A nurse arriving fresh on a spare handset would otherwise see
+  // an empty round on a ward full of enrolled children.
+  const local = recentList().map((r) => r.sn);
+  const remote = rosterByChild ? Object.keys(rosterByChild) : [];
+  const children = [...new Set([...local, ...remote])]
+    .filter((sn) => !centre || sn.startsWith(`PPP-${centre.code}-`))
+    .map((sn) => ({ sn }));
   box.replaceChildren();
 
   let due = 0;
   children.forEach(({ sn }) => {
-    const done = Boolean(lastSavedUuid(sn, 'm4', round.tp));
+    const done = wardDone(sn, round.tp);
     if (!done) due += 1;
     box.append(el('button', {
       type: 'button',
@@ -634,10 +686,17 @@ function drawRound() {
     note.textContent = 'No children on this phone yet. Enrol one below, or open one by its number once.';
     return;
   }
+  // Say where the list came from. "Everyone is due" means something very
+  // different when it is the workbook talking and when it is one handset that
+  // has never been online, and a nurse deciding whether to walk the ward again
+  // needs to know which she is looking at.
+  const source = rosterByChild
+    ? `workbook, ${agoLabel(rosterFetchedAt)}`
+    : 'this phone only — no roster yet';
   note.className = due ? 'note warn' : 'note ok';
   note.textContent = due
-    ? `${children.length} ${children.length === 1 ? 'child' : 'children'} on this phone · ${due} still due at ${tp.label}.`
-    : `Every child on this phone has ${tp.label} recorded.`;
+    ? `${children.length} ${children.length === 1 ? 'child' : 'children'} · ${due} still due at ${tp.label}. (${source})`
+    : `Every child has ${tp.label} recorded. (${source})`;
 }
 
 /**
@@ -2939,6 +2998,7 @@ async function saveModule(mod) {
     refreshWardTabs();
     // Mid-round, the next thing wanted is the next child, not this one again.
     returnToRound();
+    if (round.tp) refreshRoster();
   }
   if (['m1', 'm2', 'm5'].includes(mod)) {
     document.querySelector(`[data-module="${mod}"]`).classList.add('done');
