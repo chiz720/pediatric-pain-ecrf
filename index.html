@@ -402,6 +402,23 @@
     <ul class="doses" id="noList"></ul>
     <p class="note" id="noNote"></p>
 
+    <h3>Antiemetic</h3>
+    <div class="field">
+      <span class="lbl">Drug</span>
+      <div class="opts" id="aeDrug"></div>
+    </div>
+    <div class="field" id="aeRouteField" hidden>
+      <span class="lbl">Route</span>
+      <div class="opts" id="aeRoute"></div>
+    </div>
+    <div class="field" id="aeDoseField" hidden>
+      <label for="aeDose">Dose <em id="aeUnit">(mg)</em></label>
+      <input id="aeDose" type="number" inputmode="decimal" step="0.1" min="0" max="500">
+      <button class="secondary" id="addAe" type="button">Add this dose</button>
+    </div>
+    <ul class="doses" id="aeList"></ul>
+    <p class="note" id="aeNote"></p>
+
     <button class="save" data-save="m2">Save Module 2</button>
   </section>
 
@@ -417,6 +434,21 @@
     <div id="paedItems"></div>
     <div class="total" id="paedTotal"><span>PAED total</span><span>— / 20</span></div>
     <p class="note" id="paedVerdict"></p>
+
+    <!--
+      Nausea is asked at every timepoint pain is, and on every pathway. A child
+      can be delirious, sore and sick at once, and the three series only line
+      up for analysis if they share their timepoints.
+    -->
+    <div class="field" id="pacuPonvField">
+      <span class="lbl">Nausea &amp; vomiting</span>
+      <div class="opts" id="pacuPonv"></div>
+      <div class="field" id="pacuPonvEpisodesField" hidden style="margin-top:10px">
+        <span class="lbl">Episodes since the last check</span>
+        <div class="opts" id="pacuPonvEpisodes"></div>
+      </div>
+      <p class="note" id="pacuPonvNote"></p>
+    </div>
 
     <!--
       The pain score sits outside both pathways and is always asked. Adjudicating
@@ -459,6 +491,20 @@
         <label for="rescueNonOpioidDose">Dose <em>(mg)</em></label>
         <input id="rescueNonOpioidDose" type="number" inputmode="decimal" step="1" min="0" max="2000">
         <button class="secondary" id="addRescueNonOpioid" type="button">Add this dose</button>
+      </div>
+
+      <div class="field">
+        <span class="lbl">Rescue antiemetic</span>
+        <div class="opts" id="rescueAntiemetic"></div>
+      </div>
+      <div class="field" id="rescueAeRouteField" hidden>
+        <span class="lbl">Route</span>
+        <div class="opts" id="rescueAeRoute"></div>
+      </div>
+      <div class="field" id="rescueAeDoseField" hidden>
+        <label for="rescueAeDose">Dose <em>(mg)</em></label>
+        <input id="rescueAeDose" type="number" inputmode="decimal" step="0.1" min="0" max="500">
+        <button class="secondary" id="addRescueAe" type="button">Add this dose</button>
       </div>
 
       <ul class="doses" id="rescueList"></ul>
@@ -553,6 +599,21 @@
       <span class="lbl">Dynamic pain <em>(on movement)</em></span>
       <div id="moveScale"></div>
     </div>
+    <!--
+      Nausea sits with the pain scores because it is scored at the same moment
+      by the same person. Asking it on a separate screen would mean a second
+      visit to the bedside, which in a 48-hour camp means it does not get asked.
+    -->
+    <div class="field">
+      <span class="lbl">Nausea &amp; vomiting</span>
+      <div class="opts" id="wardPonv"></div>
+      <div class="field" id="wardPonvEpisodesField" hidden style="margin-top:10px">
+        <span class="lbl">Episodes since the last check</span>
+        <div class="opts" id="wardPonvEpisodes"></div>
+      </div>
+      <p class="note" id="wardPonvNote"></p>
+    </div>
+
     <div class="grid2">
       <div class="field">
         <span class="lbl">Rebound spike <em id="reboundCriteriaWard"></em></span>
@@ -598,6 +659,20 @@
         <button class="secondary" id="addWardNonOpioid" type="button">Add this dose</button>
       </div>
 
+      <div class="field">
+        <span class="lbl">Antiemetic</span>
+        <div class="opts" id="wardAntiemetic"></div>
+      </div>
+      <div class="field" id="wardAeRouteField" hidden>
+        <span class="lbl">Route</span>
+        <div class="opts" id="wardAeRoute"></div>
+      </div>
+      <div class="field" id="wardAeDoseField" hidden>
+        <label for="wardAeDose">Dose <em>(mg)</em></label>
+        <input id="wardAeDose" type="number" inputmode="decimal" step="0.1" min="0" max="500">
+        <button class="secondary" id="addWardAe" type="button">Add this dose</button>
+      </div>
+
       <ul class="doses" id="wardMedList"></ul>
       <div class="total" id="wardMme"><span>Morphine equivalent</span><span>—</span></div>
       <p class="note" id="wardMedNote"></p>
@@ -609,6 +684,20 @@
   <!-- ══════════ Module 5 ══════════ -->
   <section class="card mod" data-module="m5">
     <h2><span class="modno">Module 5</span> Regional offset &amp; recovery endpoints</h2>
+
+    <!--
+      Everything given, added up, at the point the child leaves.
+
+      It is what this phone has seen and it says so. Different people fill
+      different modules on different phones and the endpoint cannot be read
+      back, so a total assembled here is a running check for the person holding
+      the device, not the child's record. The authoritative per-child totals are
+      a _derived job, computed over the rows the workbook actually holds.
+    -->
+    <div class="summary" id="cumulative" hidden>
+      <p class="summary-head">Totals so far <em>— recorded on this phone only</em></p>
+      <dl id="cumulativeBody"></dl>
+    </div>
 
     <h3>Block offset &amp; rebound</h3>
     <div class="grid2">

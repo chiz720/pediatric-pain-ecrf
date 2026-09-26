@@ -6,7 +6,7 @@
  * app_version. That is deliberate — never break a working device mid-camp.
  */
 
-const VERSION = '2026.09.26a-crf';
+const VERSION = '2026.09.26b-crf';
 const CACHE = `ppp-ecrf-${VERSION}`;
 
 const SHELL = [

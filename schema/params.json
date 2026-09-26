@@ -1,5 +1,5 @@
 {
-  "paramsVersion": "1.12.0",
+  "paramsVersion": "1.13.0",
   "lastReviewed": "2026-09-26",
   "countersignedBy": null,
   "countersignedOn": null,
@@ -113,6 +113,29 @@
       "_intervalsBasis": "The regular intervals paracetamol, NSAIDs and oral opioids are written at in paediatric practice. Stored as hours so the interval is analysable rather than a label.",
       "noneLabel": "No regular analgesia prescribed"
     }
+  },
+
+  "ponv": {
+    "_note": "Postoperative nausea and vomiting, scored at every PACU and ward timepoint alongside pain. Severity is ordinal and takes one tap, with an episode count only when the child has actually vomited: nausea without vomiting is the commoner complaint and a count alone would miss it, while a severity alone loses the countable event. Recorded at the same timepoints as pain so the two series line up without interpolation.",
+    "severity": ["None", "Nausea only", "Retching", "Vomited"],
+    "_severityBasis": "An ordinal severity that works at any age and needs no self-report, so it applies to the same children FLACC covers. The highest level is the one the analysis counts as an emetic event.",
+    "vomitedValue": "Vomited",
+    "episodeOptions": [1, 2, 3],
+    "episodeTopIsOrMore": true,
+    "_episodeBasis": "Episodes since the previous assessment, not cumulative. Three is recorded as three-or-more: counting past that at the bedside is guesswork and the distinction does not change the endpoint."
+  },
+
+  "antiemetics": {
+    "_note": "Given for PONV in theatre, in recovery and on the ward. Kept as a separate list from the block adjuvants even though dexamethasone appears in both, because the same drug given into a caudal and given intravenously for nausea are different administrations answering different questions. No antiemetic has a morphine equivalent, so none of these ever enters an MME total.",
+    "routes": ["IV", "Oral", "IM"],
+    "agents": [
+      { "name": "Ondansetron", "unit": "mg" },
+      { "name": "Dexamethasone", "unit": "mg" },
+      { "name": "Metoclopramide", "unit": "mg" },
+      { "name": "Promethazine", "unit": "mg" },
+      { "name": "Cyclizine", "unit": "mg" },
+      { "name": "Aprepitant", "unit": "mg" }
+    ]
   },
 
   "pacuDelirium": {

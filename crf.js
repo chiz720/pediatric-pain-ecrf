@@ -19,7 +19,7 @@ import { minutesBetween, durationLabel, surgeryWithinAnaesthesia } from './lib/c
 import { validate as checkSubjectId, format as formatSubjectId, parse as parseSubjectId } from './lib/studyNumber.js';
 import * as sync from './lib/sync.js';
 
-const APP_VERSION = '2026.09.26a-crf';
+const APP_VERSION = '2026.09.26b-crf';
 const WHO_KEY = 'ppp.who';
 const CENTRE_KEY = 'ppp.centre';
 const ENROLLED_KEY = 'ppp.enrolled';
@@ -322,6 +322,251 @@ function selectNextTimepoints(studyNumber) {
   drawPaedItems();
 }
 
+/* ---------------- nausea and vomiting ---------------- */
+
+/**
+ * Scored the same way in recovery and on the ward, from one definition.
+ *
+ * Severity is one tap and "None" is the first of them, because none is the
+ * common answer and the common answer should be the cheapest. The episode
+ * count appears only once the child has actually vomited: asking it of a child
+ * who is merely nauseated invites a zero that cannot be told from a blank.
+ *
+ * Nothing here is gated on the pain score or on any pathway. A child can be
+ * sore, delirious and sick at the same time, and the three series only line up
+ * for analysis if each is asked at every timepoint the others are.
+ */
+function drawPonv(ids, store, redraw) {
+  const p = params().ponv;
+  const top = p.episodeOptions[p.episodeOptions.length - 1];
+
+  optionRow(ids.severity, p.severity.map((s) => ({ label: s, value: s })), (v) => {
+    store.ponv_severity = v;
+    // Episodes belong to vomiting. Stepping back down from "Vomited" must not
+    // leave a count behind describing something the child no longer did.
+    if (v !== p.vomitedValue) store.ponv_episodes = null;
+    redraw();
+  }, store.ponv_severity);
+
+  const vomited = store.ponv_severity === p.vomitedValue;
+  $(ids.episodesField).hidden = !vomited;
+  if (vomited) {
+    optionRow(ids.episodes, p.episodeOptions.map((n) => ({
+      label: p.episodeTopIsOrMore && n === top ? `${n} or more` : String(n),
+      value: n,
+    })), (n) => { store.ponv_episodes = n; redraw(); }, store.ponv_episodes);
+  }
+
+  const note = $(ids.note);
+  if (store.ponv_severity == null) {
+    note.className = 'note';
+    note.textContent = 'Asked at every timepoint — "None" is an answer and records that it was checked.';
+  } else if (store.ponv_severity === p.severity[0]) {
+    note.className = 'note ok';
+    note.textContent = 'No nausea or vomiting.';
+  } else if (vomited && store.ponv_episodes == null) {
+    note.className = 'note warn';
+    note.textContent = 'How many episodes since the last check?';
+  } else if (vomited) {
+    note.className = 'note warn';
+    const n = store.ponv_episodes;
+    note.textContent = `Vomited — ${n === top && p.episodeTopIsOrMore ? `${n} or more` : n} episode${n === 1 ? '' : 's'} since the last check.`;
+  } else {
+    note.className = 'note warn';
+    note.textContent = `${store.ponv_severity} — recorded.`;
+  }
+}
+
+const PACU_PONV_IDS = {
+  severity: 'pacuPonv', episodes: 'pacuPonvEpisodes',
+  episodesField: 'pacuPonvEpisodesField', note: 'pacuPonvNote',
+};
+const WARD_PONV_IDS = {
+  severity: 'wardPonv', episodes: 'wardPonvEpisodes',
+  episodesField: 'wardPonvEpisodesField', note: 'wardPonvNote',
+};
+
+function drawPacuPonv() {
+  drawPonv(PACU_PONV_IDS, (F.paed[F.paedTab] ||= {}), drawPacuPonv);
+}
+
+function drawWardPonv() {
+  drawPonv(WARD_PONV_IDS, (F.ward[F.wardTab] ||= {}), drawWardPonv);
+}
+
+/* ---------------- antiemetics given in theatre ---------------- */
+
+/**
+ * Module 2's antiemetic log.
+ *
+ * Deliberately not folded into the non-opioid list even though both are given
+ * in theatre and both are written in mg: a drug given for nausea answers a
+ * different question from one given for pain, and merging them would make the
+ * analgesia totals include ondansetron.
+ */
+let antiemeticLog = [];
+
+function buildAntiemetics() {
+  const { agents, routes } = params().antiemetics;
+  let picked = null;
+  let route = null;
+
+  optionRow('aeDrug', agents.map((a) => ({ label: a.name, value: a.name })), (name) => {
+    picked = agents.find((a) => a.name === name) || null;
+    route = null;
+    $('aeUnit').textContent = picked ? `(${picked.unit})` : '';
+    $('aeRouteField').hidden = !picked;
+    $('aeDoseField').hidden = true;
+    optionRow('aeRoute', routes, (r) => {
+      route = r;
+      $('aeDose').value = '';
+      $('aeDoseField').hidden = false;
+    });
+  });
+
+  $('addAe').addEventListener('click', () => {
+    const amount = num('aeDose');
+    if (!picked) { toast('Pick the drug first'); return; }
+    if (!route) { toast('Which route?'); return; }
+    if (amount == null || !(amount > 0)) { toast('Type the dose that was given'); return; }
+    antiemeticLog.push({ drug: picked.name, route, amount, unit: picked.unit });
+    $('aeDose').value = '';
+    drawAntiemetics();
+  });
+  drawAntiemetics();
+}
+
+function drawAntiemetics() {
+  const list = $('aeList');
+  const weight = F.m1.weight_kg;
+  const { agents, routes } = params().antiemetics;
+  list.replaceChildren();
+
+  antiemeticLog.forEach((d, i) => {
+    const perKg = weight ? `${Math.round((d.amount / weight) * 1000) / 1000} ${d.unit}/kg` : 'needs weight';
+    list.append(el('li', {},
+      el('span', { text: `${d.drug} ${d.route} ${d.amount} ${d.unit}` }),
+      el('span', { class: 'muted', text: perKg }),
+      el('button', {
+        type: 'button', class: 'linkish', text: 'remove',
+        onclick: () => { antiemeticLog.splice(i, 1); drawAntiemetics(); },
+      })));
+  });
+
+  // Rebuild every column so a removed dose cannot leave a stale total behind.
+  agents.forEach((a) => routes.forEach((r) => {
+    const key = `${a.name.toLowerCase()}_${r.toLowerCase()}`;
+    delete F.m2[`antiemetic_${key}_${a.unit}`];
+    delete F.m2[`antiemetic_${key}_per_kg`];
+  }));
+
+  const totals = new Map();
+  for (const d of antiemeticLog) {
+    const key = `${d.drug.toLowerCase()}_${d.route.toLowerCase()}`;
+    totals.set(key, { amount: (totals.get(key)?.amount || 0) + d.amount, unit: d.unit });
+  }
+  for (const [key, v] of totals) {
+    F.m2[`antiemetic_${key}_${v.unit}`] = Math.round(v.amount * 1000) / 1000;
+    if (weight) F.m2[`antiemetic_${key}_per_kg`] = Math.round((v.amount / weight) * 1000) / 1000;
+  }
+
+  F.m2.antiemetics = antiemeticLog.length
+    ? antiemeticLog.map((d) => `${d.drug} ${d.route} ${d.amount} ${d.unit}`).join('; ')
+    : null;
+  F.m2.antiemetic_dose_count = antiemeticLog.length;
+  drawCumulative();
+
+  const note = $('aeNote');
+  if (!antiemeticLog.length) {
+    note.className = 'note';
+    note.textContent = 'Anything given for nausea in theatre, including prophylaxis. Empty records that none was given.';
+  } else if (!weight) {
+    note.className = 'note warn';
+    note.textContent = 'Enter the weight in Module 1 to get these per kilogram.';
+  } else {
+    note.className = 'note ok';
+    note.textContent = `${antiemeticLog.length} dose${antiemeticLog.length === 1 ? '' : 's'} recorded.`;
+  }
+}
+
+/* ---------------- cumulative totals ---------------- */
+
+/**
+ * Everything given, added up, at the point the child leaves.
+ *
+ * Honest about its own limits. Different people fill different modules on
+ * different phones and the endpoint deliberately cannot be read back, so this
+ * totals what THIS device holds and says so on its face. The authoritative
+ * per-child figures are a _derived job over the rows the workbook actually
+ * has; this is the running check for the person at the bedside, and reading it
+ * as the child's record would be a mistake the panel's own heading warns about.
+ *
+ * Opioids total as morphine equivalents because that is the only way doses of
+ * different drugs by different routes can be added at all. Antiemetics have no
+ * such common metric, so they are totalled per drug and never summed across
+ * drugs — adding 4 mg of ondansetron to 8 mg of dexamethasone would produce a
+ * number that means nothing.
+ */
+function drawCumulative() {
+  const panel = $('cumulative');
+  const body = $('cumulativeBody');
+  if (!panel || !body) return;
+  const weight = F.m1.weight_kg;
+
+  let mme = 0;
+  const parts = [];
+  if (F.m2.opioid_mme_mg) { mme += F.m2.opioid_mme_mg; parts.push('theatre'); }
+
+  let pacuMme = 0;
+  for (const tp of Object.keys(pacuLog)) {
+    for (const d of pacuLog[tp].rescue) {
+      if (d.opioid && resolveMmeKey(d.drug, d.route)) {
+        pacuMme += doseMme({ drug: d.drug, route: d.route, amount: d.amount, unit: d.unit });
+      }
+    }
+  }
+  if (pacuMme) { mme += pacuMme; parts.push('recovery'); }
+
+  let wardMme = 0;
+  for (const tp of Object.keys(wardMedLog)) {
+    for (const d of wardMedLog[tp]) {
+      if (d.opioid && resolveMmeKey(d.drug, d.route)) {
+        wardMme += doseMme({ drug: d.drug, route: d.route, amount: d.amount, unit: d.unit });
+      }
+    }
+  }
+  if (wardMme) { mme += wardMme; parts.push('ward'); }
+
+  // Antiemetics, per drug, across every module this phone has touched.
+  const ae = new Map();
+  const addAe = (d) => {
+    const key = `${d.drug} ${d.route}`;
+    const cur = ae.get(key) || { amount: 0, n: 0, unit: d.unit };
+    ae.set(key, { amount: cur.amount + d.amount, n: cur.n + 1, unit: d.unit });
+  };
+  antiemeticLog.forEach(addAe);
+  for (const tp of Object.keys(pacuLog)) pacuLog[tp].rescue.filter((d) => d.antiemetic).forEach(addAe);
+  for (const tp of Object.keys(wardMedLog)) wardMedLog[tp].filter((d) => d.antiemetic).forEach(addAe);
+
+  if (!mme && !ae.size) { panel.hidden = true; return; }
+  panel.hidden = false;
+  body.replaceChildren();
+  const row = (label, text, mono) =>
+    body.append(el('dt', { text: label }), el('dd', { class: mono ? 'mono' : null, text }));
+
+  if (mme) {
+    const total = Math.round(mme * 1000) / 1000;
+    row('Opioid, morphine equivalent', `${total} mg${parts.length ? ` (${parts.join(' + ')})` : ''}`, true);
+    if (weight) row('Per kilogram', `${Math.round((total / weight) * 1000) / 1000} mg/kg`, true);
+  } else {
+    row('Opioid, morphine equivalent', 'none recorded on this phone', false);
+  }
+
+  row('Antiemetic', ae.size
+    ? [...ae].map(([k, v]) => `${k} ${Math.round(v.amount * 1000) / 1000} ${v.unit}${v.n > 1 ? ` (${v.n} doses)` : ''}`).join(' · ')
+    : 'none recorded on this phone', true);
+}
+
 /* ---------------- ward round ---------------- */
 
 /**
@@ -557,6 +802,8 @@ function buildModule1() {
     drawPacuPathways();    // and anything given in recovery
     drawWardMeds();        // and on the ward
     drawWardRx();          // and what the ward prescribed per kilogram
+    drawAntiemetics();     // and the antiemetics
+    drawCumulative();      // and the running totals
   };
   $('weight').addEventListener('input', recalcBmi);
   $('height').addEventListener('input', recalcBmi);
@@ -1547,6 +1794,36 @@ function buildPacuPathways() {
     drawRescue();
   });
 
+  const aeAgents = params().antiemetics.agents;
+  const aeRoutes = params().antiemetics.routes;
+  let rescueAe = null;
+  let rescueAeRoute = null;
+  optionRow('rescueAntiemetic', aeAgents.map((a) => ({ label: a.name, value: a.name })), (name) => {
+    rescueAe = aeAgents.find((a) => a.name === name) || null;
+    rescueAeRoute = null;
+    $('rescueAeRouteField').hidden = !rescueAe;
+    $('rescueAeDoseField').hidden = true;
+    optionRow('rescueAeRoute', aeRoutes, (r) => {
+      rescueAeRoute = r;
+      $('rescueAeDose').value = '';
+      $('rescueAeDoseField').hidden = false;
+    });
+  });
+  $('addRescueAe').addEventListener('click', () => {
+    const amount = num('rescueAeDose');
+    if (!rescueAe) { toast('Pick the drug first'); return; }
+    if (!rescueAeRoute) { toast('Which route?'); return; }
+    if (amount == null || !(amount > 0)) { toast('Type the dose that was given'); return; }
+    // opioid:false keeps it out of the morphine equivalent; antiemetic:true
+    // keeps it out of the analgesic rescue count that feeds breakthrough.
+    pacuStore(F.paedTab).rescue.push({
+      drug: rescueAe.name, route: rescueAeRoute, amount,
+      unit: rescueAe.unit, opioid: false, antiemetic: true,
+    });
+    $('rescueAeDose').value = '';
+    drawRescue();
+  });
+
   optionRow('rescueNonOpioid', nonOpioids.agents.map((a) => ({ label: a.name, value: a.name })), (name) => {
     nonOpioid = name;
     route = null;
@@ -1672,8 +1949,18 @@ function drawRescue() {
   });
 
   const anyOpioid = log.some((d) => d.opioid);
-  store.rescue_doses = log.length ? log.map((d) => `${d.drug} ${d.route} ${d.amount} ${d.unit}`).join('; ') : null;
-  store.rescue_dose_count = log.length;
+  // Analgesic and antiemetic rescue are counted apart. rescue_dose_count feeds
+  // the analgesia picture; an ondansetron is not a rescue analgesic and must
+  // not read as one.
+  const analgesic = log.filter((d) => !d.antiemetic);
+  const antiemetic = log.filter((d) => d.antiemetic);
+  store.rescue_doses = analgesic.length
+    ? analgesic.map((d) => `${d.drug} ${d.route} ${d.amount} ${d.unit}`).join('; ') : null;
+  store.rescue_dose_count = analgesic.length;
+  store.antiemetic_doses = antiemetic.length
+    ? antiemetic.map((d) => `${d.drug} ${d.route} ${d.amount} ${d.unit}`).join('; ') : null;
+  store.antiemetic_dose_count = antiemetic.length;
+  drawCumulative();
   store.rescue_mme_mg = anyOpioid ? Math.round(mme * 1000) / 1000 : null;
   store.rescue_mme_per_kg = (store.rescue_mme_mg != null && weight)
     ? Math.round((store.rescue_mme_mg / weight) * 1000) / 1000 : null;
@@ -1798,6 +2085,7 @@ function drawPacuPathways() {
 function refreshPaedTabs() {
   markSaveButton('m3', F.paedTab);
   drawPacuPathways();
+  drawPacuPonv();
   [...$('paedTabs').children].forEach((b) => {
     b.classList.toggle('on', b.dataset.tp === F.paedTab);
     b.classList.toggle('filled', Boolean(F.paed[b.dataset.tp]?.saved));
@@ -1863,6 +2151,7 @@ function buildModule4() {
   });
   buildWardMeds();
   buildWardRx();
+  buildAntiemetics();
   drawWardScales();
 }
 
@@ -1953,9 +2242,14 @@ function buildWardRx() {
   const { routes, prescription } = params().wardAnalgesia;
   const opioids = params().opioids.intraoperative.agents;
   const nonOpioids = params().nonOpioids.agents;
+  // A regular antiemetic is as much a standing prescription as a regular
+  // analgesic, and the same denominator argument applies: a PRN ondansetron
+  // against eight-hourly ondansetron means something different from one
+  // against nothing.
   const agents = [
-    ...nonOpioids.map((a) => ({ ...a, opioid: false })),
-    ...opioids.map((a) => ({ ...a, opioid: true })),
+    ...nonOpioids.map((a) => ({ ...a, opioid: false, antiemetic: false })),
+    ...opioids.map((a) => ({ ...a, opioid: true, antiemetic: false })),
+    ...params().antiemetics.agents.map((a) => ({ ...a, opioid: false, antiemetic: true })),
   ];
   let picked = null;
   let route = null;
@@ -1994,7 +2288,7 @@ function buildWardRx() {
     if (interval == null) { toast('How often is it prescribed?'); return; }
     wardRxLog.push({
       drug: picked.name, route, amount, unit: picked.unit,
-      intervalH: interval, opioid: picked.opioid,
+      intervalH: interval, opioid: picked.opioid, antiemetic: picked.antiemetic,
     });
     $('wardRxDose').value = '';
     wardRxNone = 0;
@@ -2101,6 +2395,7 @@ function wardRxColumns() {
   const out = {
     rx_none: wardRxNone == null ? null : wardRxNone,
     rx_drug_count: wardRxNone === 1 ? 0 : wardRxLog.length,
+    rx_antiemetic_count: wardRxNone === 1 ? 0 : wardRxLog.filter((d) => d.antiemetic).length,
     rx_regimen: wardRxLog.length
       ? wardRxLog.map((d) => `${d.drug} ${d.route} ${d.amount} ${d.unit} ${intervalLabel(d.intervalH)}`).join('; ')
       : null,
@@ -2146,6 +2441,35 @@ function buildWardMeds() {
     if (amount == null || !(amount > 0)) { toast('Type the dose that was given'); return; }
     wardMeds(F.wardTab).push({ type, drug: opioid.name, route: opioidRoute, amount, unit: opioid.unit, opioid: true });
     $('wardOpioidDose').value = '';
+    drawWardMeds();
+  });
+
+  const wAeAgents = params().antiemetics.agents;
+  const wAeRoutes = params().antiemetics.routes;
+  let wardAe = null;
+  let wardAeRoute = null;
+  optionRow('wardAntiemetic', wAeAgents.map((a) => ({ label: a.name, value: a.name })), (name) => {
+    wardAe = wAeAgents.find((a) => a.name === name) || null;
+    wardAeRoute = null;
+    $('wardAeRouteField').hidden = !wardAe;
+    $('wardAeDoseField').hidden = true;
+    optionRow('wardAeRoute', wAeRoutes, (r) => {
+      wardAeRoute = r;
+      $('wardAeDose').value = '';
+      $('wardAeDoseField').hidden = false;
+    });
+  });
+  $('addWardAe').addEventListener('click', () => {
+    const amount = num('wardAeDose');
+    if (!type) { toast('Prescribed, or for breakthrough?'); return; }
+    if (!wardAe) { toast('Pick the drug first'); return; }
+    if (!wardAeRoute) { toast('Which route?'); return; }
+    if (amount == null || !(amount > 0)) { toast('Type the dose that was given'); return; }
+    wardMeds(F.wardTab).push({
+      type, drug: wardAe.name, route: wardAeRoute, amount,
+      unit: wardAe.unit, opioid: false, antiemetic: true,
+    });
+    $('wardAeDose').value = '';
     drawWardMeds();
   });
 
@@ -2259,15 +2583,27 @@ function drawWardMeds() {
       })));
   });
 
-  const prn = log.filter((d) => d.type !== 'Scheduled');
+  // bt_pain_24h counts "any PRN rescue analgesic". A PRN ondansetron is not
+  // one, and letting it set rescue_given would manufacture breakthrough pain
+  // out of nausea.
+  const analgesics = log.filter((d) => !d.antiemetic);
+  const antiemetics = log.filter((d) => d.antiemetic);
+  const prn = analgesics.filter((d) => d.type !== 'Scheduled');
+  const prnAntiemetic = antiemetics.filter((d) => d.type !== 'Scheduled');
   const anyOpioid = log.some((d) => d.opioid);
 
   store.meds_given = log.length
     ? log.map((d) => `${d.type === 'Scheduled' ? 'S' : 'PRN'} ${d.drug} ${d.route} ${d.amount} ${d.unit}`).join('; ')
     : null;
   store.meds_dose_count = log.length;
-  store.scheduled_doses = log.filter((d) => d.type === 'Scheduled').length;
+  store.scheduled_doses = analgesics.filter((d) => d.type === 'Scheduled').length;
   store.prn_doses = prn.length;
+  store.antiemetic_doses = antiemetics.length
+    ? antiemetics.map((d) => `${d.type === 'Scheduled' ? 'S' : 'PRN'} ${d.drug} ${d.route} ${d.amount} ${d.unit}`).join('; ')
+    : null;
+  store.antiemetic_dose_count = antiemetics.length;
+  store.prn_antiemetic_doses = prnAntiemetic.length;
+  drawCumulative();
   // The breakthrough endpoint counts PRN rescue, so this is the flag it needs.
   store.rescue_given = prn.length > 0;
   store.mme_mg = anyOpioid ? Math.round(mme * 1000) / 1000 : null;
@@ -2323,6 +2659,7 @@ function refreshWardTabs() {
 }
 
 function drawWardScales() {
+  drawWardPonv();
   const store = (F.ward[F.wardTab] ||= {});
   paintScale($('restScale'), store, 'rest');
   paintScale($('moveScale'), store, 'move');
@@ -2561,6 +2898,11 @@ async function saveModule(mod) {
       age_months: F.m1.age_months ?? null,
       rest_pain: w.rest ?? null, dynamic_pain: w.move ?? null,
       rebound: w.rebound ?? null,
+      ponv_severity: w.ponv_severity ?? null,
+      ponv_episodes: w.ponv_episodes ?? null,
+      antiemetic_doses: w.antiemetic_doses ?? null,
+      antiemetic_dose_count: w.antiemetic_dose_count ?? null,
+      prn_antiemetic_doses: w.prn_antiemetic_doses ?? null,
       flacc_rest: w.flacc_rest || null, flacc_dynamic: w.flacc_move || null,
       analgesia_any: w.analgesia_any ?? null,
       meds_given: w.meds_given ?? null,
